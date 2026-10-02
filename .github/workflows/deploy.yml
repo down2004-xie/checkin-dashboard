@@ -1,0 +1,63 @@
+# 推送到 master 就自动构建并发布到 GitHub Pages。
+#
+# 注意本仓库默认分支是 master（不是 main）—— 本地 git init 出来的默认分支叫 master，
+# 而 GitHub 网页新建仓库默认是 main。这里写错的话推送后 Actions 完全不会触发，
+# 且 GitHub 界面上不会报任何错，极难排查。
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [master]
+  # 允许在 Actions 页面点按钮手动跑一次，调试 workflow 时很有用
+  workflow_dispatch:
+
+# 最小权限：只给这次部署必需的三项，不给仓库写权限。
+# pages: write 和 id-token: write 是 deploy-pages 认证必需的，缺了会在部署阶段失败。
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 防止连续两次推送时两个部署任务同时跑、互相覆盖。
+# cancel-in-progress 保持 false：让正在进行的部署跑完，避免发布到一半被中断。
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          # 与本地开发环境保持一致（见 MY-ISSUES.md 环境速览）
+          node-version: 22
+          # 缓存 npm 下载的包，后续构建能省一大截时间
+          cache: npm
+
+      # 用 ci 而不是 install：严格按 package-lock.json 安装，不修改 lock 文件，
+      # 且当 lock 与 package.json 不一致时直接报错（install 会悄悄改成一致）。
+      - run: npm ci
+
+      # package.json 里 build = "tsc --noEmit && vite build"，
+      # 类型有错会在这里中断构建，坏代码上不了线
+      - run: npm run build
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    # environment 是 GitHub 的部署环境保护机制，deploy-pages 要求必须声明
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
