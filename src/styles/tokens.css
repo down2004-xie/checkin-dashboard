@@ -1,0 +1,56 @@
+/* 设计变量（design tokens）
+ *
+ * 为什么单独一个文件：玻璃效果涉及大量半透明颜色、模糊半径、高光强度，
+ * 散落在各组件里改一次要翻十个文件。集中成变量后，
+ * 「调深一点」「糊一点」都只改这里。
+ *
+ * 命名规则：--颜色用途 / --尺寸用途，语义化而不是描述性
+ * （用 --glass-bg 而不是 --white-30）
+ */
+
+:root {
+  /* 圆角 */
+  --radius-card: 20px;
+  --radius-pill: 999px;
+
+  /* 玻璃层 —— 卡片 */
+  --glass-bg: rgba(255, 255, 255, 0.08);
+  --glass-bg-hover: rgba(255, 255, 255, 0.13);
+  --glass-border: rgba(255, 255, 255, 0.16);
+  /* 内阴影：模拟玻璃厚度，这条比模糊本身更决定「像不像玻璃」 */
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.22);
+  --glass-blur: 16px;
+  --glass-saturate: 160%;
+
+  /* 文字 */
+  --text-primary: rgba(255, 255, 255, 0.95);
+  --text-secondary: rgba(255, 255, 255, 0.62);
+  --text-muted: rgba(255, 255, 255, 0.38);
+
+  /* 语义色。
+   * --accent / --glow 会被 useDaylight 按当前时段覆盖，
+   * 这里的值只是首屏默认（React effect 执行前的那一帧）。 */
+  --accent: #6ea8ff;
+  --accent-soft: rgba(110, 168, 255, 0.18);
+  --glow: rgba(110, 168, 255, 0.13);
+  --done: #4ade80;
+  --done-soft: rgba(74, 222, 128, 0.16);
+
+  /* 指针光源位置，由 usePointerLight 更新 */
+  --pointer-x: 50%;
+  --pointer-y: 0%;
+
+  /* 页面背景渐变的四个色标，由 useDaylight 按时间替换 */
+  --bg-1: #0b1020;
+  --bg-2: #131a33;
+  --bg-3: #1b1430;
+
+  color-scheme: dark;
+}
+
+/* 减少动效偏好：关掉过渡和光源跟随 */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --glass-blur: 0px;
+  }
+}

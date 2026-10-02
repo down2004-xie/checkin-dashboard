@@ -1,0 +1,76 @@
+/* 全局基础样式 */
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+    'Microsoft YaHei', 'Hiragino Sans GB', sans-serif;
+  color: var(--text-primary);
+  background: var(--bg-1);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+/* 背景渐变层。
+ *
+ * 固定定位 + z-index: -1，让它待在所有内容下面。
+ * 玻璃卡片模糊的就是这一层 —— 所以它必须简单（渐变，不用照片），
+ * 否则每张卡的 blur 都要处理一张照片的像素，中低端手机必掉帧。
+ */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(
+      120% 90% at 50% 0%,
+      var(--bg-2) 0%,
+      var(--bg-1) 55%,
+      var(--bg-3) 100%
+    );
+  /* 时间配色切换时平滑过渡 */
+  transition: background 1.2s ease;
+}
+
+/* 页面级指针光源：跟着鼠标走的一团柔光，制造「沉浸光感」 */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  /* 光晕颜色由 useDaylight 按时段写入 --glow */
+  background: radial-gradient(
+    600px circle at var(--pointer-x) var(--pointer-y),
+    var(--glow),
+    transparent 70%
+  );
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::after {
+    display: none;
+  }
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+}

@@ -1,0 +1,64 @@
+<!DOCTYPE NETSCAPE-Bookmark-file-1>
+<!-- 手工构造的测试样本，格式对齐 Chrome / Edge「导出书签」的产物。
+     不是真实导出文件，里面埋了各种边界情况（见下方注释）。
+     只在开发期手工验收用，不参与构建（不在 public/ 下，Vite 不会打包）。 -->
+<META HTTP-EQUIV="Content-Type" CONTENT="text/html; charset=UTF-8">
+<TITLE>Bookmarks</TITLE>
+<H1>Bookmarks</H1>
+<DL><p>
+    <DT><H3 ADD_DATE="1696000000" LAST_MODIFIED="1696000000" PERSONAL_TOOLBAR_FOLDER="true">书签栏</H3>
+    <DL><p>
+        <DT><A HREF="https://www.jd.com/" ADD_DATE="1696000000">京东</A>
+        <DT><A HREF="https://www.nhc.gov.cn/" ADD_DATE="1696000000">国家卫健委</A>
+        <DT><A HREF="javascript:void(function(){alert(1)})" ADD_DATE="1696000000">书签小工具</A>
+        <DT><H3 ADD_DATE="1696000000">购物</H3>
+        <DL><p>
+            <DT><A HREF="https://www.taobao.com/" ADD_DATE="1696000000">淘宝</A>
+            <DT><A HREF="https://www.jd.com/" ADD_DATE="1696000000">京东商城</A>
+            <DT><A HREF="https://www.smzdm.com/" ADD_DATE="1696000000">什么值得买</A>
+        </DL><p>
+        <DT><H3 ADD_DATE="1696000000">开发</H3>
+        <DL><p>
+            <DT><A HREF="https://github.com/" ADD_DATE="1696000000">GitHub</A>
+            <DT><A HREF="chrome://bookmarks/" ADD_DATE="1696000000">书签管理器</A>
+            <DT><A HREF="https://github.com/" ADD_DATE="1696000000">GitHub 备用</A>
+        </DL><p>
+        <DT><H3 ADD_DATE="1696000000">签到</H3>
+        <DL><p>
+            <DT><A HREF="https://music.163.com/" ADD_DATE="1696000000">网易云音乐</A>
+            <DT><A HREF="https://www.xuexi.cn/" ADD_DATE="1696000000">学习强国</A>
+            <DT><A HREF="https://www.icourse163.org/" ADD_DATE="1696000000">中国大学MOOC</A>
+        </DL><p>
+    </DL><p>
+    <DT><H3 ADD_DATE="1696000000">其他书签</H3>
+    <DL><p>
+        <DT><H3 ADD_DATE="1696000000">学习</H3>
+        <DL><p>
+            <DT><A HREF="https://developer.mozilla.org/" ADD_DATE="1696000000">MDN</A>
+        </DL><p>
+    </DL><p>
+</DL><p>
+
+<!--
+埋的边界情况，对照期望结果：
+
+  共 13 条 <A>，期望解析出 4 个可导入站点。
+
+  1. 「书签栏」的直接书签 京东 / 国家卫健委 → 应归入「未分类」，不能出现
+     一个叫「书签栏」的分类（根文件夹黑名单）。
+  2. javascript: 书签小工具 → 应被丢弃，计入「地址非法」。
+  3. chrome://bookmarks/ → 应被丢弃，计入「地址非法」。共 2 条非法。
+  4. 「开发」里的 GitHub 备用 与 GitHub 同地址 → 应被丢弃，计入「重复」（1 条）。
+  5. 「购物」里的 京东商城 与「未分类」里的 京东 同地址，但在不同文件夹 →
+     组内不去重；两个文件夹都勾选时，应在 planImport 阶段被跳过。
+  6. 「其他书签」（根文件夹，黑名单）下的子文件夹「学习」→ 分类应为「学习」，
+     证明嵌套两层的文件夹名也能正确取到。
+
+  对照默认种子站点（bilibili / jd / taobao / netease-music / smzdm / github）：
+  - 「未分类」：京东已存在被跳过 → 可导入 1（国家卫健委）
+  - 「购物」：三个都已存在 → 可导入 0，整个文件夹应显示为置灰不可勾选
+  - 「开发」：GitHub 已存在 → 可导入 0，同样置灰
+  - 「签到」：网易云音乐已存在 → 可导入 2（学习强国、中国大学MOOC）
+  - 「学习」：可导入 1（MDN）
+  期望总计可导入 4 个站点。
+-->
