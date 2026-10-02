@@ -1,7 +1,7 @@
 import type { CheckInData, DateKey, Site } from '../types'
 import { DATA_VERSION } from '../types'
 import { LEGACY_SEED_IDS, SITES } from '../data/sites'
-import { siteIdFromUrl } from './site-form'
+import { isSafeHttpUrl, siteIdFromUrl } from './site-form'
 
 /**
  * 版本迁移 + 校验的唯一入口。
@@ -45,7 +45,14 @@ export function sanitizeSites(raw: unknown): Site[] {
     if (
       typeof site.id !== 'string' ||
       typeof site.name !== 'string' ||
-      typeof site.url !== 'string'
+      typeof site.url !== 'string' ||
+      // 光判断类型不够：`"javascript:alert(1)"` 是合法字符串，会一路走到
+      // <a href> 上被点击执行。备份文件是**外部输入**（别人给的 JSON），
+      // localStorage 也可能被手改，所以这里必须再卡一道协议白名单。
+      // 不安全的整条丢弃 —— 和上面几项的 continue 一致。
+      // 丢弃不会丢历史：records 里的记录会变成孤儿记录（刻意保留的），
+      // 用户重新添加同域名站点时能接回来。
+      !isSafeHttpUrl(site.url)
     ) {
       continue
     }

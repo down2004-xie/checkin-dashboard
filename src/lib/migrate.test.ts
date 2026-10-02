@@ -148,10 +148,13 @@ describe('v2 → v3：站点身份改为域名派生', () => {
     expect(result.records).toEqual({ '2026-10-01': ['jd-com', '已删掉的站'] })
   })
 
-  it('url 解析不出域名 → 保留原 id，不乱编一个', () => {
+  it('url 算不出域名 → 保留原 id，不乱编一个', () => {
+    // 输入用 'https://' 而不是空串：空串会被 sanitizeSites 的协议白名单
+    // 提前丢弃，就走不到 rekeySitesToDomains 的 `?? site.id` 降级分支了。
+    // 'https://' 协议合法但缺 host，siteIdFromUrl 算不出域名 —— 正是这条测试要的输入。
     const result = migrate({
       version: 2,
-      sites: [{ id: 'weird', name: '怪', url: '' }],
+      sites: [{ id: 'weird', name: '怪', url: 'https://' }],
       records: { '2026-10-01': ['weird'] },
     })
 
@@ -208,6 +211,23 @@ describe('sanitizeSites', () => {
 
   it('空数组 → 空数组（用户故意删空，不补默认）', () => {
     expect(sanitizeSites([])).toEqual([])
+  })
+
+  it('丢弃 url 协议不安全的站点 —— 备份文件是外部输入', () => {
+    // 攻击路径：给用户一个「备份 JSON」，里面塞 javascript: 地址，
+    // 导入后渲染成 <a href>，用户一点卡片就执行脚本
+    const sites = sanitizeSites([
+      { id: 'jd-com', name: '京东', url: 'https://www.jd.com' },
+      { id: 'evil-a', name: '注入 A', url: 'javascript:alert(1)' },
+      { id: 'evil-b', name: '注入 B', url: 'data:text/html,<script>alert(1)</script>' },
+      { id: 'evil-c', name: '注入 C', url: 'javascript:1234' },
+      { id: 'evil-d', name: '注入 D', url: 'ftp://example.com' },
+    ])
+    expect(sites.map((s) => s.id)).toEqual(['jd-com'])
+  })
+
+  it('丢弃无协议的 url（正常路径的值必然已补过协议）', () => {
+    expect(sanitizeSites([{ id: 'a', name: 'A', url: 'jd.com' }])).toEqual([])
   })
 })
 

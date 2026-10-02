@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeUrl, siteHost, siteIdFromUrl, slugify } from './site-form'
+import { isSafeHttpUrl, normalizeUrl, siteHost, siteIdFromUrl, slugify } from './site-form'
 import { SITES } from '../data/sites'
 
 describe('slugify', () => {
@@ -145,6 +145,41 @@ describe('normalizeUrl', () => {
   it('中文域名被当作合法 IDN（转 punycode）', () => {
     // new URL 会把中文域名编码成 punycode，这是标准行为，不应拒绝
     expect(normalizeUrl('哔哩哔哩.com')).not.toBeNull()
+  })
+})
+
+describe('isSafeHttpUrl —— 判断的是原值，不是改写后的结果', () => {
+  it('http / https 放行（含空格与大小写）', () => {
+    expect(isSafeHttpUrl('https://www.jd.com')).toBe(true)
+    expect(isSafeHttpUrl('http://jd.com/checkin')).toBe(true)
+    expect(isSafeHttpUrl('  https://jd.com  ')).toBe(true)
+    expect(isSafeHttpUrl('HTTPS://JD.COM')).toBe(true)
+  })
+
+  it('可执行协议一律拒绝', () => {
+    expect(isSafeHttpUrl('javascript:alert(1)')).toBe(false)
+    expect(isSafeHttpUrl('javascript:void(0)')).toBe(false)
+    expect(isSafeHttpUrl('data:text/html,<script>alert(1)</script>')).toBe(false)
+    expect(isSafeHttpUrl('vbscript:msgbox(1)')).toBe(false)
+  })
+
+  it('javascript:1234 必须拒绝 —— 这是 normalizeUrl 会误判的输入', () => {
+    // 它不带 //，会被 parseUrl 补成 https://javascript:1234
+    // （host=javascript、port=1234，是合法 URL），normalizeUrl 因此放行。
+    // 但原值渲染成 href 后点击仍会执行脚本 —— 校验层若只判断不改写，
+    // 放行的就是危险值。这条测试守着「不能偷懒复用 normalizeUrl」。
+    expect(isSafeHttpUrl('javascript:1234')).toBe(false)
+  })
+
+  it('非 http(s) 协议拒绝', () => {
+    expect(isSafeHttpUrl('ftp://example.com')).toBe(false)
+    expect(isSafeHttpUrl('file:///C:/Windows')).toBe(false)
+  })
+
+  it('无协议 / 空串拒绝', () => {
+    expect(isSafeHttpUrl('jd.com')).toBe(false)
+    expect(isSafeHttpUrl('')).toBe(false)
+    expect(isSafeHttpUrl('   ')).toBe(false)
   })
 })
 

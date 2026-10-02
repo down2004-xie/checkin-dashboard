@@ -61,6 +61,33 @@ export function normalizeUrl(input: string): string | null {
 }
 
 /**
+ * 一个 URL 字符串能否**原样**放进 `<a href>` —— 只看字面量协议。
+ *
+ * ## 为什么不能写成 `normalizeUrl(input) !== null`
+ *
+ * 因为它检查的是「改写后的结果」，而调用方要判断的是「原值」。
+ * 两者会分叉，反例是 `javascript:1234`（注意不带 `//`）：
+ *
+ *   1. `parseUrl` 的补协议正则要求 `://`，这里不匹配 → 补成 `https://javascript:1234`
+ *   2. `new URL('https://javascript:1234')` 解析成功（host=`javascript`、port=`1234`）
+ *   3. 协议是 `https:` → `normalizeUrl` 放行，返回 `https://javascript:1234/`
+ *
+ * 返回值本身是安全的，**但原值 `javascript:1234` 仍是可执行的 javascript: URL**。
+ * 校验层如果只判断、不改写（`sanitizeSites` 就是如此），放行的就是危险值。
+ *
+ * 所以这里用字面量白名单，不经过 `new URL` 的协议推断。
+ *
+ * ## 为什么拒绝无协议的输入
+ *
+ * `jd.com` 也会被拒。这是刻意的：表单（`SiteForm`）和书签导入都已经用
+ * `normalizeUrl` 补过协议，能进到存储层的值必然带协议。
+ * 严格一点只会滤掉被手改坏的数据，不会误伤正常路径。
+ */
+export function isSafeHttpUrl(input: string): boolean {
+  return /^https?:\/\//i.test(input.trim())
+}
+
+/**
  * 取 URL 的规范域名，作为站点的身份。
  *
  * 会去掉开头的 `www.`：`www.jd.com` 和 `jd.com` 是同一个站的两种写法，
