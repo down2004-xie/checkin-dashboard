@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
 
 import { useCheckInStore } from './hooks/useCheckInStore'
+import { useCompletionBurst } from './hooks/useCompletionBurst'
 import { useDaylight } from './hooks/useDaylight'
 import { useToday } from './hooks/useToday'
 import { usePointerLight } from './hooks/usePointerLight'
@@ -16,6 +17,8 @@ import { Heatmap } from './components/Heatmap'
 import { SiteForm } from './components/SiteForm'
 import { BookmarkImport } from './components/BookmarkImport'
 import { BackupBar } from './components/BackupBar'
+import { SakuraTree } from './components/SakuraTree'
+import { PetalLayer } from './components/PetalLayer'
 
 export function App() {
   useDaylight()
@@ -117,6 +120,10 @@ export function App() {
   const total = sites.length
   const streak = calcStreak(data, today)
   const longest = calcLongestStreak(data)
+  /** 今天是否已全部签完。决定樱花树是含苞还是满开 */
+  const allDone = total > 0 && done === total
+  /** 刚刚满签过几次。它是「事件计数」不是「状态」—— 保持满签不会重复触发 */
+  const burstId = useCompletionBurst(done, total)
 
   const handleToggle = useCallback(
     (siteId: string) => toggle(today, siteId),
@@ -220,6 +227,14 @@ export function App() {
 
   return (
     <div className="app">
+      {/* 装饰层。两个都是 position: fixed，以视口定位，
+          写在 .app 里不会受到它的 max-width 和 padding 影响。
+          ⚠️ 这也意味着 .app 一旦被加上 transform / filter / will-change，
+          fixed 的包含块会从视口变成 .app，两层都会被裁进内容区 ——
+          不过那条红线本来就已经写在 CLAUDE.md 里了（它同样会废掉卡片的玻璃）*/}
+      <SakuraTree fullBloom={allDone} />
+      <PetalLayer burstId={burstId} />
+
       <ProgressHeader done={done} total={total} streak={streak} longest={longest} />
 
       {saveError && (

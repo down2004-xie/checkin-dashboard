@@ -31,7 +31,7 @@ src/
 ├─ hooks/       自定义 hooks，每个文件一个 hook
 ├─ lib/         纯函数，不 import React，必须可单测
 ├─ components/  React 组件，每个文件一个组件
-└─ styles/      tokens.css（设计变量）+ global/app/features.css
+└─ styles/      tokens.css（设计变量）+ global/app/features/sakura.css
 
 fixtures/       开发期人工验收用的样本数据，不参与构建（不在 public/ 下）
 ```
@@ -50,6 +50,14 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `heatmap.ts` | 热力图网格 + 强度分级 |
 | `site-form.ts` | URL 校验 + **站点身份 id 生成**（`siteIdFromUrl`） |
 | `bookmarks.ts` | 浏览器书签 HTML 解析 + 导入计划（去重、生成 id） |
+| `sakura.ts` | 樱花树递归生成（固定种子伪随机）+ 花瓣粒子参数 |
+
+`sakura.ts` 的核心约束是**确定性**：同一种子必须生成同一棵树。
+组件会因为勾选签到而重渲染，用 `Math.random()` 的话树会在用户眼皮底下换形状。
+所以这里用固定种子的 mulberry32，不返回 `Math.random()`。
+改这个文件时注意一条踩过的坑：**递归里的角度边界只能用反射，不能用截断**
+（截断会让边界变成吸引子，整棵树退化成一把平行的扫帚，见 MY-ISSUES #9）。
+`sakura.test.ts` 里有一条专门守方向分散度的测试，阈值是靠注入 bug 反验过的。
 
 `bookmarks.ts` 有一条特殊的**测试豁免**：`parseBookmarks` 依赖 `DOMParser`，
 在 Vitest 的 node 环境里不存在（项目刻意不引入 jsdom），所以这一层没有单测，
@@ -149,6 +157,15 @@ v2 只能退回 `site-N`，而 N 取决于「当时哪些号没人占」——�
    `mix-blend-mode` / `will-change` / 自身 `backdrop-filter` 时，
    玻璃只会「看到」该祖先之后的内容 → 表现为模糊失效。改动画时先查这条。
 3. **不能做定时推送**：纯静态站无法在页面关闭时主动通知。不要为此加后端。
+4. **装饰层的分层规则（会动的一律放前面）**：樱花树是**静止/慢摆**的，放背景层
+   （`z-index: -1`，卡片背后），让玻璃把它糊成柔光；花瓣是**持续动**的，放前景层
+   （`z-index: 1`，内容之上），走纯合成层。
+   反过来放的话，花瓣每帧都在逼浏览器重新模糊每张卡片背后的像素 —— 必掉帧。
+   **判断标准：新加一个装饰元素前，先问它动不动。**
+5. **`position: fixed` 的装饰层写在 `.app` 里**（`SakuraTree` / `PetalLayer`）。
+   它们以视口定位，不受 `.app` 的 `max-width` / `padding` 影响。
+   但这意味着 `.app` 一旦被加上 `transform` / `filter` / `will-change`，
+   包含块会从视口变成 `.app` —— 和红线 2 是同一个根因，同时会废掉卡片的玻璃。
 
 ## 协作方式
 

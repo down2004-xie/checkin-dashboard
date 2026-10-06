@@ -36,6 +36,15 @@
   --done: #4ade80;
   --done-soft: rgba(74, 222, 128, 0.16);
 
+  /* 樱花（背景树 + 前景花瓣）。
+   * 刻意不跟 useDaylight 的时段色板走 —— 樱花就应该是粉的，
+   * 黄昏给它染成橙色会很怪。夜间靠透明度压低存在感，不改色相。 */
+  --sakura-branch: #c9a8bd;
+  --sakura-core: #fff1f6;
+  --sakura-bloom: #ff9ec4;
+  --sakura-petal: #ffb7d5;
+  --sakura-glow: rgba(255, 158, 196, 0.16);
+
   /* 指针光源位置，由 usePointerLight 更新 */
   --pointer-x: 50%;
   --pointer-y: 0%;
