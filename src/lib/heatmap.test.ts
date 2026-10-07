@@ -5,7 +5,7 @@ import { DATA_VERSION } from '../types'
 import { buildHeatmap, intensityOf } from './heatmap'
 
 function makeData(records: Record<string, string[]>): CheckInData {
-  return { version: DATA_VERSION, records, sites: [] }
+  return { version: DATA_VERSION, records, sites: [], todos: {} }
 }
 
 describe('intensityOf', () => {

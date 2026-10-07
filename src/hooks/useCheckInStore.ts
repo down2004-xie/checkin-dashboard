@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useReducer, useState } from 'react'
 
-import type { CheckInData, DateKey, Site } from '../types'
+import type { CheckInData, DateKey, Site, Todo } from '../types'
 import { applyAction } from '../lib/reducer'
 import { loadData, saveData } from '../lib/storage'
 
@@ -65,5 +65,39 @@ export function useCheckInStore() {
     [],
   )
 
-  return { data, toggle, addSite, addSites, updateSite, removeSite, replaceAll, saveError }
+  /**
+   * 新增待办。传入的 todo 由调用方用 `createTodo()` 造好（id 在里面生成）——
+   * 这里不代劳，是为了让「怎么造一条待办」这件事只有一个出处（lib/todo.ts），
+   * hook 只负责把它 dispatch 出去。
+   */
+  const addTodo = useCallback(
+    (day: DateKey, todo: Todo) => dispatch({ type: 'todoAdded', day, todo }),
+    [],
+  )
+
+  /** 勾选 / 取消勾选一条待办 */
+  const toggleTodo = useCallback(
+    (day: DateKey, id: string) => dispatch({ type: 'todoToggled', day, id }),
+    [],
+  )
+
+  /** 删除一条待办 */
+  const removeTodo = useCallback(
+    (day: DateKey, id: string) => dispatch({ type: 'todoRemoved', day, id }),
+    [],
+  )
+
+  return {
+    data,
+    toggle,
+    addSite,
+    addSites,
+    updateSite,
+    removeSite,
+    replaceAll,
+    addTodo,
+    toggleTodo,
+    removeTodo,
+    saveError,
+  }
 }

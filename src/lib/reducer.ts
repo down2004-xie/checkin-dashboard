@@ -1,4 +1,4 @@
-import type { CheckInData, DateKey, Site } from '../types'
+import type { CheckInData, DateKey, Site, Todo } from '../types'
 
 /**
  * 所有写操作的纯函数实现。
@@ -18,6 +18,9 @@ export type CheckInAction =
   | { type: 'sitesAdded'; sites: Site[] }
   | { type: 'siteUpdated'; id: string; patch: Partial<Site> }
   | { type: 'siteRemoved'; id: string }
+  | { type: 'todoAdded'; day: DateKey; todo: Todo }
+  | { type: 'todoToggled'; day: DateKey; id: string }
+  | { type: 'todoRemoved'; day: DateKey; id: string }
   | { type: 'replaced'; data: CheckInData }
 
 export function applyAction(data: CheckInData, action: CheckInAction): CheckInData {
@@ -32,6 +35,12 @@ export function applyAction(data: CheckInData, action: CheckInAction): CheckInDa
       return handleSiteUpdated(data, action.id, action.patch)
     case 'siteRemoved':
       return handleSiteRemoved(data, action.id)
+    case 'todoAdded':
+      return handleTodoAdded(data, action.day, action.todo)
+    case 'todoToggled':
+      return handleTodoToggled(data, action.day, action.id)
+    case 'todoRemoved':
+      return handleTodoRemoved(data, action.day, action.id)
     case 'replaced':
       return action.data
   }
@@ -109,4 +118,49 @@ function handleSiteRemoved(data: CheckInData, id: string): CheckInData {
 
   // 记录保留不动（孤儿记录不删，用户哪天加回同 id 的站点历史还在）
   return { ...data, sites }
+}
+
+/* ---- 待办 ---- */
+
+/**
+ * 三条待办操作都**不改站点、不碰 records**，只动 todos 这一天。
+ * 待办和签到是两条平行的数据线，互不影响（见 types.ts 里的说明）。
+ */
+
+function handleTodoAdded(data: CheckInData, day: DateKey, todo: Todo): CheckInData {
+  const items = data.todos[day] ?? []
+  return { ...data, todos: { ...data.todos, [day]: [...items, todo] } }
+}
+
+function handleTodoToggled(data: CheckInData, day: DateKey, id: string): CheckInData {
+  const items = data.todos[day]
+  if (items === undefined) return data // 这天本来就没有待办
+
+  const idx = items.findIndex((t) => t.id === id)
+  if (idx === -1) return data // 没找到，无变化，原样返回
+
+  // 不可变：复制数组、只替换命中的那一条，其余引用不变
+  const next = [...items]
+  next[idx] = { ...next[idx], done: !next[idx].done }
+
+  return { ...data, todos: { ...data.todos, [day]: next } }
+}
+
+function handleTodoRemoved(data: CheckInData, day: DateKey, id: string): CheckInData {
+  const items = data.todos[day]
+  if (items === undefined) return data
+
+  const next = items.filter((t) => t.id !== id)
+  if (next.length === items.length) return data // 没找到，无变化
+
+  const todos = { ...data.todos }
+  if (next.length === 0) {
+    // 这天删空了就删掉这个 key，和 handleToggle 对 records 的处理一致，
+    // 免得存储里留下一堆 { '2026-10-07': [] } 这样的空壳
+    delete todos[day]
+  } else {
+    todos[day] = next
+  }
+
+  return { ...data, todos }
 }

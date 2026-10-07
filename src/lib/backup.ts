@@ -1,4 +1,4 @@
-import type { CheckInData } from '../types'
+import type { CheckInData, Todo } from '../types'
 import { DATA_VERSION } from '../types'
 import { migrate } from './migrate'
 
@@ -142,5 +142,26 @@ export function mergeData(a: CheckInData, b: CheckInData): CheckInData {
     }
   }
 
-  return { version: Math.max(a.version, b.version), sites, records }
+  // 待办同样按天 + 按 id 取并集。
+  //
+  // 这段漏掉的后果很具体：用户在另一台设备上导入了备份，
+  // 页面一切正常，但导出前记下的待办全部不见了 —— 而且**不报错**，
+  // 和当初只合并 records 不合并 sites 是同一类「静默丢数据」的 bug。
+  // 待办 id 是随机 UUID，所以两边「同 id 不同内容」的情况实际不会发生，
+  // 去重只作幂等保护。
+  const todos: Record<string, Todo[]> = {}
+  for (const source of [a, b]) {
+    for (const [day, items] of Object.entries(source.todos)) {
+      const merged = todos[day] ?? []
+      const seenTodoIds = new Set(merged.map((t) => t.id))
+      for (const item of items) {
+        if (seenTodoIds.has(item.id)) continue
+        seenTodoIds.add(item.id)
+        merged.push(item)
+      }
+      todos[day] = merged
+    }
+  }
+
+  return { version: Math.max(a.version, b.version), sites, records, todos }
 }

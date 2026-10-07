@@ -1,4 +1,4 @@
-import type { CheckInData, DateKey, Site } from '../types'
+import type { CheckInData, DateKey, Site, Todo } from '../types'
 import { DATA_VERSION } from '../types'
 import { LEGACY_SEED_IDS, SITES } from '../data/sites'
 import { isSafeHttpUrl, siteIdFromUrl } from './site-form'
@@ -67,7 +67,41 @@ export function sanitizeSites(raw: unknown): Site[] {
 
 /** 空数据，作为一切异常情况的兜底。每次返回新对象，防止调用方互相污染。 */
 export function emptyData(): CheckInData {
-  return { version: DATA_VERSION, sites: [...SITES], records: {} }
+  return { version: DATA_VERSION, sites: [...SITES], records: {}, todos: {} }
+}
+
+/**
+ * 校验 todos。
+ *
+ * 和 sanitizeRecords 是同一套思路（非对象→{}，非数组的条目丢弃，
+ * 空数组不留 key），但多了一层：**每条待办本身也逐字段校验**。
+ * records 里存的是字符串，最多判断个 typeof；todos 里是对象，
+ * 手改坏数据、旧版本残留都可能塞进缺字段的半成品。
+ *
+ * 一个刻意的宽容：id / text 缺失或类型不对时**整条丢弃**
+ * （没有内容或没有身份，这条待办没法用），但 `done` 缺失或类型不对时
+ * 只按 `false` 处理，**不丢整条** —— 待办的正文比勾选状态值钱，
+ * 宁可把一个勾过的待办显示成没勾，也不能把用户写下的字弄丢。
+ */
+export function sanitizeTodos(raw: unknown): Record<DateKey, Todo[]> {
+  if (typeof raw !== 'object' || raw === null) return {}
+
+  const todos: Record<DateKey, Todo[]> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (!Array.isArray(value)) continue
+
+    const items: Todo[] = []
+    for (const item of value) {
+      if (typeof item !== 'object' || item === null) continue
+      const todo = item as Partial<Todo>
+      if (typeof todo.id !== 'string' || typeof todo.text !== 'string') continue
+      items.push({ id: todo.id, text: todo.text, done: todo.done === true })
+    }
+
+    // 空数组没有意义，删掉这个天 key 保持存储干净（和 sanitizeRecords 一致）
+    if (items.length > 0) todos[key] = items
+  }
+  return todos
 }
 
 /**
@@ -190,5 +224,16 @@ export function migrate(raw: unknown): CheckInData {
     version = 3
   }
 
-  return { version: DATA_VERSION, sites, records }
+  // v3 → v4：新增 todos 字段。
+  //
+  // 这是整个梯子里最轻的一档 —— 它只**加字段**，不改动 sites / records 的
+  // 任何语义，所以不需要像 v2→v3 那样重写历史。老数据没有 todos，
+  // sanitizeTodos 会把 undefined 归一化成 {}，含义就是「这天还没有待办」。
+  //
+  // 刻意**不**写成 `if (version === 3)` 分支：那样会让人误以为只有 v3 数据
+  // 才需要这一步，而实际上 v1 / v2 数据升级后同样要补上这个字段。
+  // 同一句话对所有版本都成立，就在最后统一兜底，不放进版本梯子里。
+  const todos = sanitizeTodos(candidate.todos)
+
+  return { version: DATA_VERSION, sites, records, todos }
 }

@@ -11,7 +11,7 @@ import {
 } from './backup'
 
 function makeData(records: Record<string, string[]>): CheckInData {
-  return { version: DATA_VERSION, records, sites: [] }
+  return { version: DATA_VERSION, records, sites: [], todos: {} }
 }
 
 describe('createBackup / serializeBackup', () => {
@@ -106,7 +106,7 @@ describe('parseBackup', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
 
-    expect(result.backup.data.version).toBe(3)
+    expect(result.backup.data.version).toBe(DATA_VERSION)
     expect(result.backup.data.sites.length).toBeGreaterThan(0)
     expect(result.backup.data.records).toEqual({ '2026-10-01': ['bilibili-com'] })
 
@@ -159,8 +159,8 @@ describe('mergeData', () => {
   })
 
   it('版本号取较大值', () => {
-    const a: CheckInData = { version: 1, records: {}, sites: [] }
-    const b: CheckInData = { version: 2, records: {}, sites: [] }
+    const a: CheckInData = { version: 1, records: {}, sites: [], todos: {} }
+    const b: CheckInData = { version: 2, records: {}, sites: [], todos: {} }
     expect(mergeData(a, b).version).toBe(2)
   })
 
@@ -169,6 +169,7 @@ describe('mergeData', () => {
       version: 2,
       records: {},
       sites: [{ id: 'a', name: 'A', url: 'https://a' }],
+      todos: {},
     }
     const b: CheckInData = {
       version: 2,
@@ -177,8 +178,58 @@ describe('mergeData', () => {
         { id: 'b', name: 'B', url: 'https://b' },
         { id: 'a', name: 'A2', url: 'https://a2' }, // 与 a 里同 id，应被去重（保留 a 的）
       ],
+      todos: {},
     }
     const merged = mergeData(a, b)
     expect(merged.sites.map((s) => s.id)).toEqual(['a', 'b'])
+  })
+})
+
+describe('mergeData 合并待办', () => {
+  const todo = (id: string, text: string, done = false) => ({ id, text, done })
+
+  function withTodos(todos: Record<string, { id: string; text: string; done: boolean }[]>) {
+    return { version: DATA_VERSION, records: {}, sites: [], todos }
+  }
+
+  it('两边不同天的待办都保留', () => {
+    const a = withTodos({ '2026-10-07': [todo('t1', 'A')] })
+    const b = withTodos({ '2026-10-08': [todo('t2', 'B')] })
+    expect(Object.keys(mergeData(a, b).todos).sort()).toEqual([
+      '2026-10-07',
+      '2026-10-08',
+    ])
+  })
+
+  it('同一天的待办取并集，不是一边覆盖另一边', () => {
+    const a = withTodos({ '2026-10-07': [todo('t1', 'A')] })
+    const b = withTodos({ '2026-10-07': [todo('t2', 'B')] })
+    expect(mergeData(a, b).todos['2026-10-07'].map((t) => t.id)).toEqual(['t1', 't2'])
+  })
+
+  it('同 id 去重', () => {
+    const a = withTodos({ '2026-10-07': [todo('t1', 'A')] })
+    const b = withTodos({ '2026-10-07': [todo('t1', 'A')] })
+    expect(mergeData(a, b).todos['2026-10-07']).toHaveLength(1)
+  })
+
+  it('一边没有 todos → 不改变另一边', () => {
+    const a = withTodos({ '2026-10-07': [todo('t1', 'A')] })
+    const b = withTodos({})
+    expect(mergeData(a, b).todos).toEqual(a.todos)
+    expect(mergeData(b, a).todos).toEqual(a.todos)
+  })
+
+  it('端到端：导出再导入，待办一条不少', () => {
+    // 这条守着「给 CheckInData 加字段时，别忘了 mergeData 也要合并它」。
+    // 漏掉的后果是静默丢数据：导入成功、页面正常，但待办全没了。
+    const data = withTodos({
+      '2026-10-07': [todo('t1', '写作业', true), todo('t2', '买牛奶')],
+    })
+    const result = parseBackup(serializeBackup(createBackup(data)))
+
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.backup.data.todos).toEqual(data.todos)
   })
 })

@@ -17,6 +17,7 @@ import { Heatmap } from './components/Heatmap'
 import { SiteForm } from './components/SiteForm'
 import { BookmarkImport } from './components/BookmarkImport'
 import { BackupBar } from './components/BackupBar'
+import { TodoPanel } from './components/TodoPanel'
 import { SakuraTree } from './components/SakuraTree'
 import { PetalLayer } from './components/PetalLayer'
 
@@ -25,8 +26,19 @@ export function App() {
   usePointerLight()
 
   const today = useToday()
-  const { data, toggle, addSite, addSites, updateSite, removeSite, replaceAll, saveError } =
-    useCheckInStore()
+  const {
+    data,
+    toggle,
+    addSite,
+    addSites,
+    updateSite,
+    removeSite,
+    replaceAll,
+    addTodo,
+    toggleTodo,
+    removeTodo,
+    saveError,
+  } = useCheckInStore()
 
   const [notice, setNotice] = useState<string | null>(null)
   const [activeCategory, setActiveCategory] = useState<string | null>(null)
@@ -128,6 +140,32 @@ export function App() {
   const handleToggle = useCallback(
     (siteId: string) => toggle(today, siteId),
     [toggle, today],
+  )
+
+  /**
+   * 今天的待办。
+   *
+   * 待办按天存在 data.todos 里，但界面这一版只展示今天，所以在这里
+   * 就把日期这一维消化掉 —— TodoPanel 收到的只是一个普通数组，
+   * 不需要知道「今天」是哪天，也不需要知道存储的形状。
+   */
+  const todayTodos = data.todos[today] ?? []
+
+  // 三个待办回调都把 today 固定住，组件只传「哪一条」。
+  // 这样 TodoPanel 的 props 里完全没有日期概念，职责更窄
+  const handleAddTodo = useCallback(
+    (todo: Parameters<typeof addTodo>[1]) => addTodo(today, todo),
+    [addTodo, today],
+  )
+
+  const handleToggleTodo = useCallback(
+    (id: string) => toggleTodo(today, id),
+    [toggleTodo, today],
+  )
+
+  const handleRemoveTodo = useCallback(
+    (id: string) => removeTodo(today, id),
+    [removeTodo, today],
   )
 
   const handleAddSite = useCallback(
@@ -325,6 +363,15 @@ export function App() {
           从书签导入
         </button>
       </div>
+
+      {/* 今日待办。放在站点区块之后：签到是这个项目的主线，
+          待办是并列的次要信息，不该把主内容挤下去 */}
+      <TodoPanel
+        todos={todayTodos}
+        onAdd={handleAddTodo}
+        onToggle={handleToggleTodo}
+        onRemove={handleRemoveTodo}
+      />
 
       <BackupBar
         notice={notice}

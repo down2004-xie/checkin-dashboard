@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CheckInData } from '../types'
+import type { CheckInData, Todo } from '../types'
 import { DATA_VERSION } from '../types'
 import { applyAction } from './reducer'
 import { siteIdFromUrl } from './site-form'
@@ -20,8 +20,16 @@ function makeData(
   records: Record<string, string[]>,
   sites = [SITE_A, SITE_B],
 ): CheckInData {
-  return { version: DATA_VERSION, records, sites }
+  return { version: DATA_VERSION, records, sites, todos: {} }
 }
+
+/** 造只带待办的测试数据 —— 待办测试不关心站点和签到记录 */
+function makeTodoData(todos: Record<string, Todo[]>): CheckInData {
+  return { version: DATA_VERSION, records: {}, sites: [], todos }
+}
+
+const TODO_A: Todo = { id: 't1', text: '写作业', done: false }
+const TODO_B: Todo = { id: 't2', text: '买牛奶', done: false }
 
 describe('toggled', () => {
   it('添加签到', () => {
@@ -240,5 +248,129 @@ describe('端到端：删掉再加，历史能接回来（v3 身份改造的核�
     expect(calcSiteStreak(data, jd.id, '2026-10-02')).toBe(3)
     // 而这正是它危险的地方：全局连续天数看起来一切正常
     expect(calcStreak(data, '2026-10-02')).toBe(3)
+  })
+})
+
+describe('todoAdded', () => {
+  it('追加到当天列表', () => {
+    const after = applyAction(makeTodoData({}), {
+      type: 'todoAdded',
+      day: '2026-10-07',
+      todo: TODO_A,
+    })
+    expect(after.todos['2026-10-07']).toEqual([TODO_A])
+  })
+
+  it('同一天多条按添加顺序累积', () => {
+    let data = applyAction(makeTodoData({}), {
+      type: 'todoAdded',
+      day: '2026-10-07',
+      todo: TODO_A,
+    })
+    data = applyAction(data, { type: 'todoAdded', day: '2026-10-07', todo: TODO_B })
+    expect(data.todos['2026-10-07'].map((t) => t.id)).toEqual(['t1', 't2'])
+  })
+
+  it('不同天互不影响', () => {
+    let data = applyAction(makeTodoData({}), {
+      type: 'todoAdded',
+      day: '2026-10-07',
+      todo: TODO_A,
+    })
+    data = applyAction(data, { type: 'todoAdded', day: '2026-10-08', todo: TODO_B })
+    expect(Object.keys(data.todos).sort()).toEqual(['2026-10-07', '2026-10-08'])
+    expect(data.todos['2026-10-07']).toHaveLength(1)
+  })
+
+  it('不可变：原 data 的 todos 不被修改', () => {
+    const before = makeTodoData({})
+    applyAction(before, { type: 'todoAdded', day: '2026-10-07', todo: TODO_A })
+    expect(before.todos).toEqual({})
+  })
+
+  it('records / sites 不为所动', () => {
+    const before = makeTodoData({})
+    const after = applyAction(before, {
+      type: 'todoAdded',
+      day: '2026-10-07',
+      todo: TODO_A,
+    })
+    expect(after.records).toBe(before.records)
+    expect(after.sites).toBe(before.sites)
+  })
+})
+
+describe('todoToggled', () => {
+  it('把未完成翻成完成', () => {
+    const before = makeTodoData({ '2026-10-07': [TODO_A] })
+    const after = applyAction(before, { type: 'todoToggled', day: '2026-10-07', id: 't1' })
+    expect(after.todos['2026-10-07'][0].done).toBe(true)
+  })
+
+  it('再翻一次变回未完成', () => {
+    const before = makeTodoData({ '2026-10-07': [{ ...TODO_A, done: true }] })
+    const after = applyAction(before, { type: 'todoToggled', day: '2026-10-07', id: 't1' })
+    expect(after.todos['2026-10-07'][0].done).toBe(false)
+  })
+
+  it('不动没被点中的那一条（兄弟项保持同一个引用）', () => {
+    // 这条测的是不可变的粒度：只复制命中的那条，其余原样带过去。
+    // 如果实现写成「整数组 map 出全新对象」，功能也对，
+    // 但会让所有兄弟项在每次点击时都换引用、引发无谓的重渲染
+    const before = makeTodoData({ '2026-10-07': [TODO_A, TODO_B] })
+    const after = applyAction(before, { type: 'todoToggled', day: '2026-10-07', id: 't1' })
+
+    expect(after.todos['2026-10-07'][1]).toBe(TODO_B) // 引用没变
+    expect(after.todos['2026-10-07'][0]).not.toBe(TODO_A) // 命中的那条是新对象
+  })
+
+  it('这天没有待办 → 原样返回同一个引用', () => {
+    const before = makeTodoData({})
+    expect(applyAction(before, { type: 'todoToggled', day: '2026-10-07', id: 't1' })).toBe(before)
+  })
+
+  it('id 不存在 → 原样返回同一个引用', () => {
+    const before = makeTodoData({ '2026-10-07': [TODO_A] })
+    expect(applyAction(before, { type: 'todoToggled', day: '2026-10-07', id: 'nope' })).toBe(before)
+  })
+})
+
+describe('todoRemoved', () => {
+  it('删掉指定的一条，其余保留', () => {
+    const before = makeTodoData({ '2026-10-07': [TODO_A, TODO_B] })
+    const after = applyAction(before, { type: 'todoRemoved', day: '2026-10-07', id: 't1' })
+    expect(after.todos['2026-10-07']).toEqual([TODO_B])
+  })
+
+  it('删空后整个天的 key 被移除，不留空数组', () => {
+    // 和 handleToggle 对 records 的处理保持一致。
+    // 留着 { '2026-10-07': [] } 会让存储里攒一堆空壳，
+    // 也让「这天有没有待办」的判断多一种状态
+    const before = makeTodoData({ '2026-10-07': [TODO_A] })
+    const after = applyAction(before, { type: 'todoRemoved', day: '2026-10-07', id: 't1' })
+    expect(after.todos['2026-10-07']).toBeUndefined()
+    expect(Object.keys(after.todos)).toEqual([])
+  })
+
+  it('只删一天，别的天不受影响', () => {
+    const before = makeTodoData({ '2026-10-07': [TODO_A], '2026-10-08': [TODO_B] })
+    const after = applyAction(before, { type: 'todoRemoved', day: '2026-10-07', id: 't1' })
+    expect(after.todos['2026-10-08']).toEqual([TODO_B])
+  })
+
+  it('id 不存在 → 原样返回同一个引用', () => {
+    const before = makeTodoData({ '2026-10-07': [TODO_A] })
+    expect(applyAction(before, { type: 'todoRemoved', day: '2026-10-07', id: 'nope' })).toBe(before)
+  })
+
+  it('待办变更不影响签到 records（两条数据线互相独立）', () => {
+    const before: CheckInData = {
+      version: DATA_VERSION,
+      records: { '2026-10-07': ['a'] },
+      sites: [SITE_A],
+      todos: { '2026-10-07': [TODO_A] },
+    }
+    const after = applyAction(before, { type: 'todoRemoved', day: '2026-10-07', id: 't1' })
+    expect(after.records).toEqual({ '2026-10-07': ['a'] })
   })
 })

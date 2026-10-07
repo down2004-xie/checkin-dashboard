@@ -12,7 +12,7 @@ import {
 
 /** 造测试数据的小工具：传日期列表，生成对应的 records */
 function makeData(days: Record<string, string[]>): CheckInData {
-  return { version: DATA_VERSION, records: days, sites: [] }
+  return { version: DATA_VERSION, records: days, sites: [], todos: {} }
 }
 
 describe('hasCheckedIn', () => {

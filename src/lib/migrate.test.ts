@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest'
 
 import { DATA_VERSION } from '../types'
-import { emptyData, migrate, sanitizeRecords, sanitizeSites } from './migrate'
+import {
+  emptyData,
+  migrate,
+  sanitizeRecords,
+  sanitizeSites,
+  sanitizeTodos,
+} from './migrate'
 
 describe('migrate', () => {
   it('v1 数据能一路升到当前版本，且历史记录的旧 id 被接续而不是变成孤儿', () => {
@@ -82,7 +88,7 @@ describe('v2 → v3：站点身份改为域名派生', () => {
       records: { '2026-10-01': ['jd'] },
     })
 
-    expect(result.version).toBe(3)
+    expect(result.version).toBe(DATA_VERSION)
     expect(result.sites).toEqual([
       { id: 'jd-com', name: '京东', url: 'https://www.jd.com', category: '购物' },
     ])
@@ -231,11 +237,101 @@ describe('sanitizeSites', () => {
   })
 })
 
+describe('v3 → v4：新增 todos 字段', () => {
+  it('v3 数据升级后带上空的 todos（老用户不必清库）', () => {
+    const result = migrate({
+      version: 3,
+      sites: [{ id: 'jd-com', name: '京东', url: 'https://www.jd.com' }],
+      records: { '2026-10-01': ['jd-com'] },
+    })
+    expect(result.version).toBe(DATA_VERSION)
+    expect(result.todos).toEqual({})
+    // 关键：加字段不能顺手把已有的 sites / records 弄坏
+    expect(result.sites).toHaveLength(1)
+    expect(result.records).toEqual({ '2026-10-01': ['jd-com'] })
+  })
+
+  it('v1 数据一路升到 v4，同样带 todos', () => {
+    // 守着「加字段不能只在某一档生效」：v4 的 todos 兜底写在梯子外面，
+    // 对 v1 进来的数据也要成立
+    const result = migrate({ version: 1, records: { '2026-10-01': ['bilibili'] } })
+    expect(result.version).toBe(DATA_VERSION)
+    expect(result.todos).toEqual({})
+  })
+
+  it('已有的 todos 被保留，不因再迁移一次而丢', () => {
+    const result = migrate({
+      version: 4,
+      sites: [],
+      records: {},
+      todos: { '2026-10-07': [{ id: 't1', text: '写作业', done: true }] },
+    })
+    expect(result.todos).toEqual({
+      '2026-10-07': [{ id: 't1', text: '写作业', done: true }],
+    })
+  })
+
+  it('v4 数据再迁移一次是幂等的', () => {
+    const once = migrate({ version: 3, sites: [], records: {} })
+    expect(migrate(once)).toEqual(once)
+  })
+})
+
+describe('sanitizeTodos', () => {
+  it('非对象 → 空对象', () => {
+    expect(sanitizeTodos(null)).toEqual({})
+    expect(sanitizeTodos('oops')).toEqual({})
+    expect(sanitizeTodos(undefined)).toEqual({})
+  })
+
+  it('非数组的天 key 被丢弃', () => {
+    expect(sanitizeTodos({ '2026-10-07': 'not-array' })).toEqual({})
+  })
+
+  it('丢弃缺 id 或缺 text 的条目', () => {
+    const result = sanitizeTodos({
+      '2026-10-07': [
+        { id: 't1', text: '好的', done: false },
+        { text: '没有 id', done: false },
+        { id: 't2', done: false },
+        { id: 't3', text: 123, done: false },
+        'not-an-object',
+        42,
+      ],
+    })
+    expect(result['2026-10-07']).toEqual([{ id: 't1', text: '好的', done: false }])
+  })
+
+  it('done 缺失或类型不对 → 按未完成处理，但**不丢整条**', () => {
+    // 这是一条刻意的宽容：待办正文比勾选状态值钱。
+    // 宁可把一个勾过的待办显示成没勾（用户再点一下就是了），
+    // 也不能因为 done 字段坏了就把用户写下的字整条扔掉
+    const result = sanitizeTodos({
+      '2026-10-07': [
+        { id: 't1', text: '缺 done' },
+        { id: 't2', text: 'done 是字符串', done: 'yes' },
+        { id: 't3', text: 'done 正常', done: true },
+      ],
+    })
+    expect(result['2026-10-07']).toEqual([
+      { id: 't1', text: '缺 done', done: false },
+      { id: 't2', text: 'done 是字符串', done: false },
+      { id: 't3', text: 'done 正常', done: true },
+    ])
+  })
+
+  it('过滤后为空的天 key 不保留', () => {
+    expect(sanitizeTodos({ '2026-10-07': [] })).toEqual({})
+    expect(sanitizeTodos({ '2026-10-07': ['垃圾'] })).toEqual({})
+  })
+})
+
 describe('emptyData', () => {
-  it('返回当前版本 + 默认站点 + 空 records', () => {
+  it('返回当前版本 + 默认站点 + 空 records + 空 todos', () => {
     const data = emptyData()
     expect(data.version).toBe(DATA_VERSION)
     expect(data.sites.length).toBeGreaterThan(0)
     expect(data.records).toEqual({})
+    expect(data.todos).toEqual({})
   })
 })

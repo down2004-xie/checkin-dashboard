@@ -45,6 +45,32 @@ export interface Site {
   category?: string
 }
 
+/**
+ * 一条待办事项。和 Site 一样是「用户数据」，按天归属。
+ *
+ * 为什么单独一个类型而不是直接塞字符串数组：
+ * 待办需要「勾选状态」——字符串本身表达不了。而且以后想加备注、
+ * 优先级、提醒时间，都是在对象上加字段，不用改数组的形状。
+ */
+export interface Todo {
+  /**
+   * 唯一标识，添加时由 `createTodo` 生成（随机 UUID）。
+   *
+   * 和 Site.id「由域名派生」是**相反**的取舍：
+   * 站点 id 必须稳定，因为它是历史记录的锚（删了再加要能接回历史）；
+   * 待办没有这个需求 —— 它只需要在**当天**唯一定位得了一条。
+   * 用随机 id 反而更简单，也顺带避开「同一天写两条一模一样的待办
+   * （比如两次「买牛奶」）互相顶掉」这个坑。
+   */
+  id: string
+
+  /** 待办内容 */
+  text: string
+
+  /** 是否已完成 */
+  done: boolean
+}
+
 /** localStorage 里存储的完整结构 */
 export interface CheckInData {
   /**
@@ -53,6 +79,7 @@ export interface CheckInData {
    * v1：只有 records。
    * v2：加了 sites —— 站点定义入库，用户可增删改站点。
    * v3：站点 id 从「名字派生的 slug」改成「域名派生」，历史记录随之重写。
+   * v4：加了 todos —— 按天归属的每日待办。纯新增字段，不重写既有数据。
    * 以后加字段（备注、标签）时必须再 +1，并在 lib/migrate.ts 里写迁移分支。
    * 没有版本号就只能让用户清库重来。
    */
@@ -63,7 +90,20 @@ export interface CheckInData {
 
   /** 日期 -> 当天已签到的站点 id 列表 */
   records: Record<DateKey, string[]>
+
+  /**
+   * 日期 -> 当天的待办清单。
+   *
+   * 刻意和 records 用同一套「按日期 key 分组」的形状（都是 Record<DateKey, _[]>），
+   * 而不是一份不带日期的扁平列表。原因是这个项目的核心维度就是「一天」：
+   * 签到记录、连续天数、热力图都挂在日期上，待办跟着日期走才和它们同源。
+   *
+   * 注意：**待办不参与签到进度环，也不触发樱花满开**。两者虽然同构，
+   * 语义却不同 —— 签到是「每天固定要签的站」，待办是「今天顺手记的一件事」。
+   * 混进进度环会让「100%」的含义变模糊（没写完待办算不算没完成今天？）。
+   */
+  todos: Record<DateKey, Todo[]>
 }
 
 /** 当前的数据格式版本，与 CheckInData.version 对应 */
-export const DATA_VERSION = 3
+export const DATA_VERSION = 4

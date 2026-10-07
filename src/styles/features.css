@@ -296,6 +296,182 @@
   margin-left: auto;
 }
 
+/* ---------- 今日待办 ---------- */
+
+/* 面板外壳和 .heatmap / .site-form 一致：
+   同样的玻璃底 + 边框 + 内阴影，保证视觉上是「一套东西」 */
+.todo {
+  padding: 18px 20px;
+  margin-bottom: 28px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-inset);
+}
+
+.todo__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.todo__title {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+/* 「3/5」计数。done 色和签到的一致，暗示「完成」是同一个语义 */
+.todo__count {
+  font-size: 13px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.todo__form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.todo__input {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.22);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.todo__input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.todo__empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.todo__list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.todo__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 8px;
+  border-radius: 10px;
+  transition: background-color 0.15s ease;
+}
+
+.todo__item:hover {
+  background: var(--glass-bg-hover);
+}
+
+.todo__check {
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: 1px solid var(--glass-border);
+  background: transparent;
+  color: var(--done);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  transition:
+    background-color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.todo__item--done .todo__check {
+  background: var(--done-soft);
+  border-color: var(--done);
+}
+
+.todo__text {
+  flex: 1;
+  font-size: 14px;
+  color: var(--text-primary);
+  /* 长文本折行，不要把行撑宽到溢出面板 */
+  overflow-wrap: anywhere;
+}
+
+/* 完成态：变灰 + 划线。用 text-decoration 而不是删掉文字 ——
+   用户需要看到「做完了什么」，划线是「已完成」的通用视觉语言 */
+.todo__item--done .todo__text {
+  color: var(--text-muted);
+  text-decoration: line-through;
+}
+
+.todo__remove {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  border: none;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  /* 和卡片的编辑/删除图标一样：平时藏起来，悬停或聚焦才出现 */
+  opacity: 0;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease,
+    color 0.15s ease;
+}
+
+.todo__item:hover .todo__remove,
+.todo__remove:focus-visible {
+  opacity: 1;
+}
+
+.todo__remove:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--text-primary);
+}
+
+.todo__check:focus-visible,
+.todo__remove:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/* 触屏没有 hover，删除按钮必须常驻，否则点不到 */
+@media (hover: none) {
+  .todo__remove {
+    opacity: 0.7;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .todo__item,
+  .todo__check,
+  .todo__remove {
+    transition: none;
+  }
+}
+
 /* ---------- 卡片上的编辑 / 删除小按钮 ---------- */
 
 .card__actions {
