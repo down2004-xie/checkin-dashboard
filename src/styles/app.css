@@ -42,6 +42,38 @@
   font-size: 14px;
 }
 
+/* 满签祝贺：金色渐变文字 + 淡入上浮。
+   background-clip: text 让渐变只染在文字上；
+   金色刻意不走 --accent（时段色）—— 祝贺是「奖励」语义，
+   换个时段就变蓝变橙会稀释这份仪式感 */
+.header__subtitle--celebrate {
+  background: linear-gradient(
+    100deg,
+    #ffd98e 0%,
+    #ffb64d 45%,
+    #ffd98e 90%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  /* 兜底：不支持 background-clip: text 的浏览器退成纯色，
+     transparent 文字会直接消失，所以必须放在 @supports 外 */
+  color: #f5b95d;
+  -webkit-text-fill-color: transparent;
+  font-weight: 600;
+  animation: celebrate-in 0.7s ease both;
+}
+
+@keyframes celebrate-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
 .header__stats {
   display: flex;
   align-items: center;
@@ -87,7 +119,8 @@
   );
   /* 中间挖空成环：用径向渐变遮住中心，比嵌套 div 简单 */
   position: relative;
-  transition: background 0.4s ease;
+  /* 弧的生长动画由 useTweenNumber 在 JS 里补间（CSS 对 conic-gradient
+     不插值），这里不挂 transition —— 挂了也是安慰剂 */
 }
 
 .ring::before {
@@ -146,6 +179,7 @@
   transition:
     background-color 0.2s ease,
     border-color 0.2s ease,
+    box-shadow 0.2s ease,
     transform 0.2s ease;
 }
 
@@ -161,6 +195,12 @@
   background-color: var(--glass-bg-hover);
   border-color: rgba(255, 255, 255, 0.26);
   transform: translateY(-2px);
+  /* 上浮必须配阴影扩散，否则卡片像贴在背景上平移，没有「浮起来」。
+     两层：近处贴地的窄影 + 远处弥散的大影，比单层大影更像真实光照 */
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 4px 12px rgba(0, 0, 0, 0.18),
+    0 14px 40px rgba(0, 0, 0, 0.22);
 }
 
 .card--done {
@@ -240,6 +280,48 @@
 .card--done .card__toggle {
   border-color: var(--done);
   background: var(--done-soft);
+}
+
+/* 勾选瞬间的弹性动画。类由 JS 在「未签 → 已签」的瞬间挂上、
+   animationend 摘掉 —— 不能直接挂在 .card--done 上，
+   否则页面加载时所有已签卡片会满屏重播一遍动画 */
+.card__toggle--pop {
+  animation: toggle-pop 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* 过冲曲线（backdrop easing）：缩放冲过 1 再弹回来，才有「按下去弹起来」的手感 */
+@keyframes toggle-pop {
+  0% {
+    transform: scale(0.6);
+  }
+  55% {
+    transform: scale(1.18);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+/* 涟漪：从勾选按钮中心扩散的一圈绿环，扩散 + 淡出后自动消失。
+   用 ::after 伪元素而不是多插一个 DOM 节点 */
+.card__toggle--pop::after {
+  content: '';
+  position: absolute;
+  inset: -2px;
+  border-radius: 50%;
+  border: 2px solid var(--done);
+  animation: toggle-ripple 0.55s ease-out forwards;
+}
+
+@keyframes toggle-ripple {
+  0% {
+    transform: scale(1);
+    opacity: 0.7;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
 }
 
 /* 键盘焦点可见：玻璃背景上默认焦点环对比度不够 */
@@ -455,5 +537,19 @@
   .card,
   .backup {
     transition: none;
+  }
+
+  /* 勾选反馈只剩瞬时的状态变化，不播动画 */
+  .card__toggle--pop {
+    animation: none;
+  }
+
+  .card__toggle--pop::after {
+    display: none;
+  }
+
+  /* 祝贺文案直接出现，不上浮 */
+  .header__subtitle--celebrate {
+    animation: none;
   }
 }

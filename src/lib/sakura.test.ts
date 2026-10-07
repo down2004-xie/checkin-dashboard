@@ -4,6 +4,7 @@ import {
   SAKURA_SEED,
   buildSakuraTree,
   createRandom,
+  flowerTransform,
   makeBurstPetals,
   makePetals,
 } from './sakura'
@@ -64,9 +65,9 @@ describe('buildSakuraTree', () => {
   })
 
   it('枝条数量符合满二叉树的递归结构', () => {
-    // MAX_DEPTH = 7 → 每层分两叉 → 1+2+4+...+128 = 255 段
+    // MAX_DEPTH = 6 → 每层分两叉 → 1+2+4+...+64 = 127 段。
     // 这条守的是「有人改深度忘了 DOM 会指数膨胀」
-    expect(buildSakuraTree(SAKURA_SEED).branches.length).toBe(255)
+    expect(buildSakuraTree(SAKURA_SEED).branches.length).toBe(127)
   })
 
   it('每段枝条的粗细都是正数且逐级变细', () => {
@@ -76,7 +77,7 @@ describe('buildSakuraTree', () => {
       expect(Number.isFinite(branch.width)).toBe(true)
     }
 
-    const trunk = branches.find((b) => b.depth === 7)
+    const trunk = branches.find((b) => b.depth === 6)
     const twig = branches.find((b) => b.depth === 0)
     expect(trunk).toBeDefined()
     expect(twig).toBeDefined()
@@ -112,23 +113,62 @@ describe('buildSakuraTree', () => {
     expect(bounds.maxY).toBeGreaterThan(bounds.minY)
   })
 
-  it('所有花苞和花朵都落在包围盒内', () => {
+  it('所有花苞、花朵和柔光云都落在包围盒内', () => {
     // 这条直接对应「花被容器边缘切掉」这个视觉 bug
-    const { buds, blooms, bounds } = buildSakuraTree(SAKURA_SEED)
-    for (const b of [...buds, ...blooms]) {
+    const { buds, flowers, blooms, mist, bounds } = buildSakuraTree(SAKURA_SEED)
+    for (const b of [...buds, ...mist]) {
       expect(b.x - b.r).toBeGreaterThanOrEqual(bounds.minX)
       expect(b.x + b.r).toBeLessThanOrEqual(bounds.maxX)
       expect(b.y - b.r).toBeGreaterThanOrEqual(bounds.minY)
       expect(b.y + b.r).toBeLessThanOrEqual(bounds.maxY)
     }
+    for (const f of [...flowers, ...blooms]) {
+      // 花按「旋转后最远的花瓣尖」算 —— 旋转不改变最大距离，
+      // 所以用 scale 缩放后的花瓣半径（组件里 FLOWER_RADIUS = 11.2）
+      const r = 11.2 * f.scale
+      expect(f.x - r).toBeGreaterThanOrEqual(bounds.minX)
+      expect(f.x + r).toBeLessThanOrEqual(bounds.maxX)
+      expect(f.y - r).toBeGreaterThanOrEqual(bounds.minY)
+      expect(f.y + r).toBeLessThanOrEqual(bounds.maxY)
+    }
   })
 
-  it('花苞覆盖每一个末梢，花朵是花苞的子集', () => {
+  it('花覆盖每一个挂花点：花 + 花苞数量等于挂花点数', () => {
+    // 挂花点要么开花要么留苞，不能凭空丢 —— 丢了树冠就有秃斑
+    const { buds, flowers } = buildSakuraTree(SAKURA_SEED)
+    expect(buds.length + flowers.length).toBeGreaterThan(0)
+    // 花占多数（rand < 0.72 开花），花苞是少数
+    expect(flowers.length).toBeGreaterThan(buds.length)
+  })
+
+  it('满签 blooms 的位置取自花苞 —— 含苞的位置盛开', () => {
+    // 叙事约束：满开不是凭空多一批花，是花苞开成花
     const { buds, blooms } = buildSakuraTree(SAKURA_SEED)
-    expect(buds.length).toBeGreaterThan(0)
     expect(blooms.length).toBeGreaterThan(0)
-    // 只有一部分花苞会开成大花，全开的话树冠会糊成一坨粉色
-    expect(blooms.length).toBeLessThan(buds.length)
+    expect(blooms.length).toBeLessThanOrEqual(buds.length)
+    for (const bloom of blooms) {
+      const matched = buds.some(
+        (b) => Math.abs(b.x - bloom.x) < 0.5 && Math.abs(b.y - bloom.y) < 0.5,
+      )
+      expect(matched).toBe(true)
+    }
+  })
+
+  it('柔光云存在且在树冠内部（不盖过轮廓）', () => {
+    const { mist, buds, flowers } = buildSakuraTree(SAKURA_SEED)
+    expect(mist.length).toBe(6)
+
+    // 树冠的横向范围由花决定，云的质心必须落在里面
+    const xs = [...buds, ...flowers].map((b) => b.x)
+    const minX = Math.min(...xs)
+    const maxX = Math.max(...xs)
+    for (const m of mist) {
+      expect(m.x).toBeGreaterThan(minX)
+      expect(m.x).toBeLessThan(maxX)
+      expect(m.r).toBeGreaterThan(0)
+      expect(m.opacity).toBeGreaterThan(0)
+      expect(m.opacity).toBeLessThan(1)
+    }
   })
 
   it('枝条方向是分散的，不会退化成一把平行的扫帚', () => {
@@ -155,16 +195,29 @@ describe('buildSakuraTree', () => {
   })
 
   it('花苞的半径和不透明度都在合理区间', () => {
-    const { buds, blooms } = buildSakuraTree(SAKURA_SEED)
+    const { buds, flowers, blooms } = buildSakuraTree(SAKURA_SEED)
     for (const b of buds) {
+      // 花苞是小点（r < 4）：上一版 r 6~11 的大圆叠出来是棉花糖
       expect(b.r).toBeGreaterThan(0)
+      expect(b.r).toBeLessThan(4)
       expect(b.opacity).toBeGreaterThan(0)
       expect(b.opacity).toBeLessThanOrEqual(1)
     }
-    for (const b of blooms) {
-      expect(b.r).toBeGreaterThan(buds[0].r) // 大花必须真的更大
-      expect(b.opacity).toBeLessThanOrEqual(1)
+    for (const f of [...flowers, ...blooms]) {
+      expect(f.scale).toBeGreaterThan(0)
+      expect(f.rotation).toBeGreaterThanOrEqual(0)
+      expect(f.rotation).toBeLessThan(360)
+      expect(f.opacity).toBeGreaterThan(0)
+      expect(f.opacity).toBeLessThanOrEqual(1)
     }
+  })
+
+  it('flowerTransform 输出可复现且格式正确', () => {
+    const { flowers } = buildSakuraTree(SAKURA_SEED)
+    const t1 = flowerTransform(flowers[0])
+    const t2 = flowerTransform(flowers[0])
+    expect(t1).toBe(t2)
+    expect(t1).toMatch(/^translate\(-?\d+(\.\d+)? -?\d+(\.\d+)?\) rotate\(\d+\) scale\(\d+(\.\d+)?\)$/)
   })
 })
 

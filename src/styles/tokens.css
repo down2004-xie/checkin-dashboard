@@ -38,11 +38,15 @@
 
   /* 樱花（背景树 + 前景花瓣）。
    * 刻意不跟 useDaylight 的时段色板走 —— 樱花就应该是粉的，
-   * 黄昏给它染成橙色会很怪。夜间靠透明度压低存在感，不改色相。 */
-  --sakura-branch: #c9a8bd;
+   * 黄昏给它染成橙色会很怪。夜间靠透明度压低存在感，不改色相。
+   *
+   * --sakura-branch 是深棕：真樱花的枝就是深色的，
+   * 上一版用半透明灰粉，渲染出来像粉色电线 */
+  --sakura-branch: #5d4a52;
   --sakura-core: #fff1f6;
   --sakura-bloom: #ff9ec4;
   --sakura-petal: #ffb7d5;
+  --sakura-mist: rgba(255, 158, 196, 0.09);
   --sakura-glow: rgba(255, 158, 196, 0.16);
 
   /* 指针光源位置，由 usePointerLight 更新 */

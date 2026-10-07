@@ -53,10 +53,43 @@ export interface Branch {
   angle: number
 }
 
+/**
+ * 一朵花的实例。
+ *
+ * 花型本身（五片花瓣 + 花心）在组件里只定义一次（<defs> 里的 #sakura-flower），
+ * 每朵花只是它的 <use> 实例 —— 这里给的是「在哪、多大、什么姿态」。
+ * 上一版用大圆斑当花，几百个圆叠出来是一坨棉花糖；改成五瓣花后
+ * 单朵花有结构，树冠才像「由花组成」而不是「一团粉」。
+ */
+export interface Flower {
+  x: number
+  y: number
+  /** 相对标准花的缩放。标准花的花瓣尖端半径约 11.2 画布单位 */
+  scale: number
+  /** 旋转角 deg。每朵花姿态不同，避免 <use> 复用带来的「印章感」 */
+  rotation: number
+  opacity: number
+}
+
+/** 花苞：还没开的小点，撑树冠的轮廓 */
 export interface Blossom {
   x: number
   y: number
   /** 半径，画布单位 */
+  r: number
+  opacity: number
+}
+
+/**
+ * 柔光云：花后面垫的大团极淡光斑。
+ *
+ * 作用是景深 —— 真实看樱花时远处花丛是虚化成色斑的，
+ * 全部清晰反而假。上一版没有这一层，靠把花本身画大画糊来造氛围，
+ * 结果就是棉花糖。现在「近处清晰小花 + 远处模糊光斑」分工明确。
+ */
+export interface MistCloud {
+  x: number
+  y: number
   r: number
   opacity: number
 }
@@ -70,10 +103,14 @@ export interface Bounds {
 
 export interface SakuraTree {
   branches: Branch[]
-  /** 花苞：一直都在，构成树冠的底子 */
+  /** 柔光云（景深层，渲染在枝条和花之后面） */
+  mist: MistCloud[]
+  /** 花苞：一直都在 */
   buds: Blossom[]
-  /** 盛开的花：满签时才浮现，所以单独一组 */
-  blooms: Blossom[]
+  /** 常态可见的花 */
+  flowers: Flower[]
+  /** 满签时才开的花：位置取自花苞，叙事上是「含苞 → 盛开」 */
+  blooms: Flower[]
   /**
    * 树实际占据的矩形范围（画布单位，已含花瓣半径和外扩余量）。
    *
@@ -88,7 +125,7 @@ export interface SakuraTree {
  * 坐标系：约 1000×1000 的画布，原点在左上、y 向下。
  *
  * 不用 0~1 的归一化坐标，是因为 SVG 的 stroke-width 在过小的坐标系里
- * 会失真（1 单位 = 整条线宽）；1000 这个量级下，枝宽 26 到 0.9 都能正常表达。
+ * 会失真（1 单位 = 整条线宽）；1000 这个量级下，枝宽 9 到 0.9 都能正常表达。
  * 画布边界本身不影响渲染 —— 组件用的是算出来的包围盒，不是这 1000。
  */
 
@@ -96,11 +133,15 @@ export interface SakuraTree {
 const ROOT_X = 985
 const ROOT_Y = 1012
 
-/** 递归层数。7 层的枝条没有被整除，宁可少画几根也别让 DOM 里塞上千个节点 */
-const MAX_DEPTH = 7
+/** 递归层数。6 层共 127 段枝条 —— 上一版的 7 层 255 段配 26 宽的主干，
+ *  渲染出来是一把粗粉电线；枝条一细，更少的层数反而更干净 */
+const MAX_DEPTH = 6
 
 /** 树冠整体的倾斜目标（弧度）。0 = 正上，正数 = 往左偏 */
 const LEAN = 0.55
+
+/** 标准花的花瓣尖端到花心的距离。算包围盒和渐变半径都用它 */
+const FLOWER_RADIUS = 11.2
 
 /**
  * 把倾角折回合理区间 —— 注意是**反射**，不是截断。
@@ -134,6 +175,11 @@ function r1(n: number): number {
   return Math.round(n * 10) / 10
 }
 
+/** 保留两位小数，给 transform / opacity 用 */
+function r2(n: number): number {
+  return Math.round(n * 100) / 100
+}
+
 /**
  * 递归生成一棵樱花树。
  *
@@ -145,7 +191,7 @@ function r1(n: number): number {
 export function buildSakuraTree(seed: number = SAKURA_SEED): SakuraTree {
   const rand = createRandom(seed)
   const branches: Branch[] = []
-  /** 末梢枝条的端点，花就开在这些位置上 */
+  /** 末梢附近的挂花点，花和花苞都从这些位置里出 */
   const tips: Array<{ x: number; y: number }> = []
   /**
    * 每段枝条的终点，用来量包围盒。
@@ -189,17 +235,18 @@ export function buildSakuraTree(seed: number = SAKURA_SEED): SakuraTree {
     ends.push({ x: nx, y: ny, r: strokeWidth / 2 })
     if (depth === MAX_DEPTH) ends.push({ x, y, r: strokeWidth / 2 })
 
-    // 挂花。注意深度 0、1、2 的枝都要挂，不能只挂末梢 ——
-    // 只挂末梢时花全在树冠的最外缘，中间是空的，
-    // 渲染出来就是「一圈花边套着一个空壳」，一眼看穿是生成的
-    if (depth <= 2) {
+    // 挂花点。挂在 depth 0、1 的枝上 —— 这两级细枝在整个树冠体积里
+    // 均匀分布（递归分叉的天然结果），不会出现「花只挂在树冠最外缘，
+    // 中间是空壳」的假树冠。上一版挂到 depth 2，点太多太密，
+    // 是棉花糖观的成因之一
+    if (depth <= 1) {
       const count = depth === 0 ? 2 : 1
       for (let i = 0; i < count; i++) {
         // t 落在枝条的后半段，花朝枝梢方向聚集
         const t = 0.35 + rand() * 0.65
         tips.push({
-          x: x + (nx - x) * t + (rand() - 0.5) * 20,
-          y: y + (ny - y) * t + (rand() - 0.5) * 20,
+          x: x + (nx - x) * t + (rand() - 0.5) * 18,
+          y: y + (ny - y) * t + (rand() - 0.5) * 18,
         })
       }
     }
@@ -228,30 +275,79 @@ export function buildSakuraTree(seed: number = SAKURA_SEED): SakuraTree {
 
   // 主干初始就朝左偏 0.5 rad（约 29°）：树根在右下角，
   // 主干斜着插进画面比笔直向上自然，也顺便把树冠推向左上
-  grow(ROOT_X, ROOT_Y, 0.5, 190, 26, MAX_DEPTH)
+  grow(ROOT_X, ROOT_Y, 0.5, 175, 9, MAX_DEPTH)
 
+  // ---- 花：一部分挂花点开成五瓣小花，其余留作花苞 ----
+  const flowers: Flower[] = []
   const buds: Blossom[] = []
-  const blooms: Blossom[] = []
+  const budTips: Array<{ x: number; y: number }> = []
 
   for (const tip of tips) {
-    const x = tip.x + (rand() - 0.5) * 16
-    const y = tip.y + (rand() - 0.5) * 16
+    const x = tip.x + (rand() - 0.5) * 14
+    const y = tip.y + (rand() - 0.5) * 14
 
-    // 每个末梢一定有花苞 —— 树冠的轮廓靠它撑起来，不能随机跳过
-    buds.push({ x, y, r: 6 + rand() * 5, opacity: 0.3 + rand() * 0.2 })
+    if (rand() < 0.72) {
+      flowers.push({
+        x,
+        y,
+        scale: 0.45 + rand() * 0.6,
+        rotation: rand() * 360,
+        opacity: 0.6 + rand() * 0.35,
+      })
+    } else {
+      // 花苞是小点，不是上一版那种 r 6~11 的大圆 ——
+      // 大圆叠大圆就是棉花糖，小点才有「还没开」的意思
+      buds.push({ x, y, r: 1.8 + rand() * 1.6, opacity: 0.45 + rand() * 0.3 })
+      budTips.push({ x, y })
+    }
+  }
 
-    // 只有一部分末梢开出大花。全开会让树冠糊成一坨粉色，失去枝干的层次
-    if (rand() < 0.42) {
+  // 满签才开的花：位置直接取自花苞 —— 含苞的位置盛开，
+  // 而不是凭空多出一批花，叙事上才是「开花」
+  const blooms: Flower[] = []
+  for (const p of budTips) {
+    if (rand() < 0.55) {
       blooms.push({
-        x: x + (rand() - 0.5) * 10,
-        y: y + (rand() - 0.5) * 10,
-        r: 15 + rand() * 17,
-        opacity: 0.55 + rand() * 0.35,
+        x: p.x,
+        y: p.y,
+        scale: 0.75 + rand() * 0.55,
+        rotation: rand() * 360,
+        opacity: 0.7 + rand() * 0.3,
       })
     }
   }
 
-  return { branches, buds, blooms, bounds: measureBounds(ends, buds, blooms) }
+  // ---- 柔光云（景深层）----
+  // 位置从随机挂花点往质心收 35%：云要待在树冠**内部**，
+  // 不能盖过树冠轮廓，否则树缘会糊成一圈粉边
+  let centroidX = 0
+  let centroidY = 0
+  for (const tip of tips) {
+    centroidX += tip.x
+    centroidY += tip.y
+  }
+  centroidX /= tips.length
+  centroidY /= tips.length
+
+  const mist: MistCloud[] = []
+  for (let i = 0; i < 6; i++) {
+    const tip = tips[Math.floor(rand() * tips.length)]
+    mist.push({
+      x: tip.x + (centroidX - tip.x) * 0.35 + (rand() - 0.5) * 60,
+      y: tip.y + (centroidY - tip.y) * 0.35 + (rand() - 0.5) * 60,
+      r: 55 + rand() * 75,
+      opacity: 0.3 + rand() * 0.25,
+    })
+  }
+
+  return {
+    branches,
+    mist,
+    buds,
+    flowers,
+    blooms,
+    bounds: measureBounds(ends, buds, flowers, blooms, mist),
+  }
 }
 
 /**
@@ -264,7 +360,9 @@ export function buildSakuraTree(seed: number = SAKURA_SEED): SakuraTree {
 function measureBounds(
   ends: Array<{ x: number; y: number; r: number }>,
   buds: Blossom[],
-  blooms: Blossom[],
+  flowers: Flower[],
+  blooms: Flower[],
+  mist: MistCloud[],
 ): Bounds {
   let minX = Infinity
   let minY = Infinity
@@ -280,7 +378,11 @@ function measureBounds(
 
   for (const end of ends) include(end.x, end.y, end.r)
   for (const b of buds) include(b.x, b.y, b.r)
-  for (const b of blooms) include(b.x, b.y, b.r)
+  // 花按「旋转后最远的花瓣尖」算 —— 旋转不改变到花心的最大距离，
+  // 所以直接用 FLOWER_RADIUS × scale，不需要真的做旋转
+  for (const f of flowers) include(f.x, f.y, FLOWER_RADIUS * f.scale)
+  for (const f of blooms) include(f.x, f.y, FLOWER_RADIUS * f.scale)
+  for (const m of mist) include(m.x, m.y, m.r)
 
   // 留一点余量，免得树冠的花贴着容器边缘被切掉。
   // 花瓣的半径已经单独算进去了，这 16 只是视觉上的呼吸空间，不用给多
@@ -385,4 +487,9 @@ export function makeBurstPetals(count: number, seed: number): BurstPetal[] {
   }
 
   return petals
+}
+
+/** 把花的实例写成 SVG transform。导出是为了让组件和这里保持同一套精度处理 */
+export function flowerTransform(f: Flower): string {
+  return `translate(${r1(f.x)} ${r1(f.y)}) rotate(${Math.round(f.rotation)}) scale(${r2(f.scale)})`
 }

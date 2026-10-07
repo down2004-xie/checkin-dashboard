@@ -1,6 +1,6 @@
 import { useMemo } from 'react'
 
-import { SAKURA_SEED, buildSakuraTree } from '../lib/sakura'
+import { SAKURA_SEED, buildSakuraTree, flowerTransform } from '../lib/sakura'
 
 interface SakuraTreeProps {
   /**
@@ -52,18 +52,50 @@ export function SakuraTree({ fullBloom }: SakuraTreeProps) {
         preserveAspectRatio="xMaxYMax meet"
       >
         <defs>
-          <radialGradient id="sakura-bloom-grad">
+          <radialGradient id="sakura-bud-grad">
             {/* 颜色由 sakura.css 通过 CSS 变量给。
                 不能写成 stop-color="var(--x)" 属性 ——
                 表现属性按 SVG 值解析，不认 CSS 变量，会静默失效 */}
             <stop className="sakura__stop-core" offset="0%" />
-            <stop className="sakura__stop-mid" offset="60%" />
+            <stop className="sakura__stop-edge" offset="100%" />
+            {/* 两个 stop 就够了：花苞是小点，中→边渐隐即可 */}
+          </radialGradient>
+
+          {/* 花瓣渐变：中心亮、边缘粉，给 <use> 的花瓣用 */}
+          <radialGradient id="sakura-petal-grad">
+            <stop className="sakura__stop-core" offset="0%" />
+            <stop className="sakura__stop-mid" offset="70%" />
             <stop className="sakura__stop-edge" offset="100%" />
           </radialGradient>
+
+          {/* 标准花型：五瓣 + 花心，只定义一次，每朵花是它的 <use> 实例。
+              花瓣用椭圆旋转 72° 排一圈 —— 比五段贝塞尔短得多，
+              在这个显示尺寸下（一朵花屏幕上约 10~20px）看不出差别 */}
+          <g id="sakura-flower">
+            {[0, 72, 144, 216, 288].map((angle) => (
+              <ellipse
+                key={angle}
+                cx="0"
+                cy="-6.4"
+                rx="4.6"
+                ry="6.4"
+                transform={`rotate(${angle})`}
+              />
+            ))}
+            <circle className="sakura__flower-core" cx="0" cy="0" r="2.6" />
+          </g>
         </defs>
 
         {/* 会摆动的部分单独包一层，transform-origin 设在树根 */}
         <g className="sakura__canopy">
+          {/* 柔光云：最底下的景深层。花后面垫几团极淡的光斑，
+              远处虚化成色斑 —— 全部清晰反而假 */}
+          <g className="sakura__mist">
+            {tree.mist.map((m, i) => (
+              <circle key={i} cx={m.x} cy={m.y} r={m.r} opacity={m.opacity} />
+            ))}
+          </g>
+
           <g className="sakura__branches">
             {tree.branches.map((branch, i) => (
               <path key={i} d={branch.d} strokeWidth={branch.width} />
@@ -83,15 +115,27 @@ export function SakuraTree({ fullBloom }: SakuraTreeProps) {
             ))}
           </g>
 
+          {/* 常态可见的五瓣小花。每朵只是 #sakura-flower 的 <use> 实例，
+              花型只定义一次，DOM 不膨胀 */}
+          <g className="sakura__flowers">
+            {tree.flowers.map((f, i) => (
+              <use
+                key={i}
+                href="#sakura-flower"
+                transform={flowerTransform(f)}
+                opacity={f.opacity}
+              />
+            ))}
+          </g>
+
           {/* 盛开的花：默认不可见，满签时整组淡入 + 微微张开 */}
           <g className="sakura__blooms">
-            {tree.blooms.map((bloom, i) => (
-              <circle
+            {tree.blooms.map((f, i) => (
+              <use
                 key={i}
-                cx={bloom.x}
-                cy={bloom.y}
-                r={bloom.r}
-                opacity={bloom.opacity}
+                href="#sakura-flower"
+                transform={flowerTransform(f)}
+                opacity={f.opacity}
               />
             ))}
           </g>

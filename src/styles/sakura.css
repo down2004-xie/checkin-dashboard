@@ -36,22 +36,34 @@
 }
 
 /* 枝条：线宽由 React 按枝级内联传入，这里只管颜色。
-   半透明的灰粉在深色背景上像逆光的枝干 ——
-   实心深棕色在 #0b1020 上基本看不见，而纯白又会盖过卡片上的文字 */
+   深棕半透明 —— 真樱花的枝干就是深色的，衬在粉花下面才有对比；
+   上一版的灰粉细线让整棵树看着像一丛粉色电线 */
 .sakura__branches path {
   fill: none;
   stroke: var(--sakura-branch);
-  stroke-opacity: 0.4;
+  stroke-opacity: 0.85;
   stroke-linecap: round;
 }
 
-/* 花簇：一个圆就是一朵渐变光斑，不逐朵画五瓣。
-   树冠上有近三百朵，每朵画花瓣会把 DOM 撑到几千个节点，
-   而这个显示尺寸下（一朵十几像素）肉眼分辨不出单瓣 ——
-   看到的本来就是「一簇粉」，不是一朵花 */
-.sakura__buds circle,
-.sakura__blooms circle {
-  fill: url(#sakura-bloom-grad);
+/* 花苞：小圆点，径向渐变从中到边渐隐 */
+.sakura__buds circle {
+  fill: url(#sakura-bud-grad);
+}
+
+/* 五瓣小花：花瓣用花瓣色，花心单独给暖黄 ——
+   真樱花的花心是深红的，一点暖色对比让花「活」，不然是粉色印章 */
+.sakura__flowers use,
+.sakura__blooms use {
+  fill: url(#sakura-petal-grad);
+}
+
+.sakura__flower-core {
+  fill: #f0c9a8;
+}
+
+/* 柔光云：极淡的大光斑，只负责景深 */
+.sakura__mist circle {
+  fill: var(--sakura-mist);
 }
 
 /* 渐变的三个色标。

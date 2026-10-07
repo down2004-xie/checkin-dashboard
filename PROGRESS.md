@@ -79,6 +79,57 @@
   > 直接用 Chrome DevTools Protocol 驱动它即可（Node 22 自带全局 `fetch`
   > 和 `WebSocket`，零新依赖）。踩到的坑记在 MY-ISSUES #11。
 
+自动化验证结果（2026-10-07，樱花树视觉重设计之后）：
+- `npx vitest run` → 13 个测试文件 / **228 个用例**全通过
+  （sakura.test.ts 形态类断言随新结构重写：枝条 255→127 段、
+  花苞/大圆斑改为 flowers/blooms/mist 三层，新增 3 条结构断言）
+- `npx tsc --noEmit` → 退出码 0
+- `npx vite build` → 成功（JS 256 KB / gzip 80.9 KB，CSS 17.4 KB / gzip 4.0 KB）
+- **浏览器实拍验收**（无头 Edge + CDP，脚本 `shots/sakura-shot.mjs`）：
+  含苞态 / 满开态两张截图确认 —— 枝条从「灰粉粗线」改为深棕细枝，
+  花从「大圆斑叠成的棉花糖」改为清晰的五瓣小花（`<defs>` 定义一次花型 +
+  `<use>` 复用，DOM 不膨胀），花后垫 6 团极淡柔光云做景深。
+  截图在 `shots/sakura-new-*.png`。
+
+自动化验证结果（2026-10-07，卡片悬停立体感 + 勾选弹性动画之后）：
+- `npx vitest run` → 13 个测试文件 / 228 个用例全通过（无新增测试：
+  动画是纯视觉行为，断言在浏览器验收脚本里做）
+- `npx tsc --noEmit` → 退出码 0
+- `npx vite build` → 成功（CSS 18.1 KB / gzip 4.2 KB）
+- **浏览器行为验收**（无头 Edge + CDP，脚本 `shots/toggle-verify.mjs`），
+  7 项断言全过：加载时不播动画 / 点击后 pop 类出现 / `card--done` 挂上 /
+  `getAnimations` 确认动画在播 / 播完 pop 类被摘 / **刷新后已签卡片不重播** /
+  取消勾选不播。动画特写 `shots/toggle-pop-mid.png`。
+  改动：`.card:hover` 补双层外阴影（上浮配阴影才有「浮起来」）；
+  勾选瞬间 `card__toggle--pop` 弹性过冲 + `::after` 绿色涟漪，
+  类由 GlassCard 用 ref 记跳变沿挂载、`onAnimationEnd` 摘除，
+  `prefers-reduced-motion` 下全部关掉。
+
+自动化验证结果（2026-10-07，满签祝贺文案之后）：
+- `npx vitest run` → 13 个测试文件 / 228 个用例全通过
+- `npx tsc --noEmit` → 退出码 0
+- `npx vite build` → 成功
+- **浏览器行为验收**（无头 Edge + CDP，脚本 `shots/celebrate-verify.mjs`），
+  6 项断言全过：未满签时无祝贺 / 签完最后一单 celebrate 类出现 /
+  文案正确（streak=1 时是「今天全部签完了 🎉」，>1 才带「连续 N 天」）/
+  动画在播 / **刷新后不重播** / 取消勾选祝贺消失。
+  头部特写 `shots/celebrate-header.png`。
+  改动：ProgressHeader 满签分支换成金色渐变文字（`background-clip: text`
+  + 纯色兜底），淡入上浮动画；金色刻意不跟时段色板走（祝贺是奖励语义）。
+
+自动化验证结果（2026-10-07，数字平滑过渡之后 —— 美化系列全部完成）：
+- `npx vitest run` → 14 个测试文件 / **232 个用例**全通过
+  （新增 `lib/tween.ts` + 4 条缓动测试：端点精确、值域、单调、缓出特性）
+- `npx tsc --noEmit` → 退出码 0
+- `npx vite build` → 成功（JS 256.8 KB / gzip 81.2 KB）
+- **浏览器行为验收**（无头 Edge + CDP，脚本 `shots/tween-verify.mjs`），
+  5 项断言全过：点击后 120ms 的中间帧显示 11%（0→17% 的补间路上，
+  不是瞬间跳变）/ 弧的 `--ratio` 与文字同步 / 终值稳定在 17% / 终态同步。
+  改动：新增 `useTweenNumber` hook（rAF 补间，首帧即终值不播加载动画、
+  中途变目标从当前值接着滚、reduced-motion 直达终值）；
+  ProgressHeader 的弧和百分比由同一补间值驱动（aria-label 仍用真实值）；
+  删掉 `.ring` 上对 conic-gradient 无效的安慰剂 transition。
+
 ## 部署状态
 
 - 站点地址：https://down2004-xie.github.io/checkin-dashboard/
