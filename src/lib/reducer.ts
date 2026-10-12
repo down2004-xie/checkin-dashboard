@@ -1,19 +1,8 @@
-import type { CheckInData, DateKey, Site, Todo } from '../types'
-
-/**
- * 所有写操作的纯函数实现。
- *
- * 为什么收在这里而不是散在 hook 里：
- * 1. 纯函数可以直接单测，hook 不行（要 render）
- * 2. 每个分支（toggled / siteAdded / …）的边界条件写完后不会因为 React 重渲染逻辑被改坏
- * 3. 将来加操作（如「一键全签」）只是多加一个 action type，不影响 UI 层
- *
- * 核心原则：**任何操作都不变异入参**，每次都返回新的 CheckInData 对象，
- * React 靠引用变化判断要不要重渲染。
- */
+import type { CheckInData, DateKey, Preferences, Site, Todo } from '../types'
+import { mergeData } from './backup'
+import { siteHost } from './site-form'
 
 export type CheckInAction =
-  | { type: 'toggled'; day: DateKey; siteId: string }
   | { type: 'siteAdded'; site: Site }
   | { type: 'sitesAdded'; sites: Site[] }
   | { type: 'siteUpdated'; id: string; patch: Partial<Site> }
@@ -22,11 +11,92 @@ export type CheckInAction =
   | { type: 'todoToggled'; day: DateKey; id: string }
   | { type: 'todoRemoved'; day: DateKey; id: string }
   | { type: 'replaced'; data: CheckInData }
+  | { type: 'merged'; data: CheckInData }
+  | { type: 'dayStarted'; day: DateKey }
+  | { type: 'checkedSet'; day: DateKey; siteId: string; checked: boolean }
+  | { type: 'siteMoved'; id: string; targetId: string }
+  | { type: 'preferencesChanged'; patch: Partial<Preferences> }
+  | { type: 'todoEdited'; day: DateKey; id: string; text: string }
+  | { type: 'todoDoneSet'; day: DateKey; id: string; done: boolean }
+  | { type: 'todoRestored'; day: DateKey; todo: Todo; index: number }
+  | { type: 'todosCarried'; from: DateKey; day: DateKey }
+
+/**
+ * 所有写操作的纯函数实现。
+ *
+ * 为什么收在这里而不是散在 hook 里：
+ * 1. 纯函数可以直接单测，hook 不行（要 render）
+ * 2. 每个分支的边界条件写完后不会因为 React 重渲染逻辑被改坏
+ * 3. 将来加操作（如「一键全签」）只是多加一个 action type，不影响 UI 层
+ *
+ * 核心原则：**任何操作都不变异入参**，每次都返回新的 CheckInData 对象，
+ * React 靠引用变化判断要不要重渲染。
+ *
+ * 一条删掉的旧 action：`toggled`（无条件翻转勾选态）。它在 v5 被移除，
+ * 因为生产代码早已改用 `checkedSet`（显式目标状态、且挡住暂停站点），
+ * 只剩测试还在跑它 —— 留着会让人以为它还能用。
+ */
 
 export function applyAction(data: CheckInData, action: CheckInAction): CheckInData {
   switch (action.type) {
-    case 'toggled':
-      return handleToggle(data, action.day, action.siteId)
+    case 'merged':
+      return mergeData(data, action.data)
+    case 'dayStarted':
+      return snapshotDay(data, action.day)
+    case 'checkedSet': {
+      if (!data.sites.some((site) => site.id === action.siteId && !site.paused)) return data
+      const checked = data.records[action.day]?.includes(action.siteId) ?? false
+      return checked === action.checked ? data : handleToggle(data, action.day, action.siteId)
+    }
+    case 'siteMoved': {
+      /**
+       * 为什么是「和相邻的**可见**站点换位」而不是「和索引 ±1 的存储邻居换位」：
+       *
+       * 页面可以带着筛选显示一部分站点（分类 / 状态 / 搜索）。如果按存储索引 ±1 换，
+       * 用户在「只看未签到」的列表里点「后移」，换掉的可能是屏幕外那张卡片 ——
+       * **可见列表一动不动，存储顺序却被改了**，用户完全看不出发生了什么，
+       * 还会以为按钮坏了。所以把「谁算相邻」交给调用方（它才知道当前可见列表），
+       * reducer 只负责在存储数组里做这次交换。
+       *
+       * 参数名从 `direction: -1 | 1` 改成 `targetId`，就是为了让「和谁换」
+       * 成为一个显式的、调用方必须想清楚的值 —— 以前那个 ±1 把
+       * 「存储顺序里的邻居」这个错误假设写进了类型里。
+       */
+      const { id, targetId } = action
+      if (id === targetId) return data
+
+      const index = data.sites.findIndex((site) => site.id === id)
+      const destination = data.sites.findIndex((site) => site.id === targetId)
+      if (index < 0 || destination < 0) return data
+
+      const sites = [...data.sites]
+      ;[sites[index], sites[destination]] = [sites[destination], sites[index]]
+      return { ...data, sites }
+    }
+    case 'preferencesChanged':
+      return { ...data, preferences: { ...data.preferences, ...action.patch } }
+    case 'todoEdited': {
+      const text = action.text.trim()
+      if (!text) return data
+      return updateTodo(data, action.day, action.id, { text })
+    }
+    case 'todoDoneSet':
+      return updateTodo(data, action.day, action.id, { done: action.done })
+    case 'todoRestored': {
+      const items = data.todos[action.day] ?? []
+      if (items.some((todo) => todo.id === action.todo.id)) return data
+      const next = [...items]
+      next.splice(Math.min(action.index, next.length), 0, action.todo)
+      return { ...data, todos: { ...data.todos, [action.day]: next } }
+    }
+    case 'todosCarried': {
+      if (action.from >= action.day) return data
+      const existing = new Set((data.todos[action.day] ?? []).map((todo) => todo.id))
+      const added = (data.todos[action.from] ?? []).filter((todo) => !todo.done && !existing.has(todo.id))
+        .map((todo) => ({ ...todo, carriedFrom: action.from }))
+      if (!added.length) return data
+      return { ...data, todos: { ...data.todos, [action.day]: [...(data.todos[action.day] ?? []), ...added] } }
+    }
     case 'siteAdded':
       return handleSiteAdded(data, action.site)
     case 'sitesAdded':
@@ -68,6 +138,7 @@ function handleToggle(data: CheckInData, day: DateKey, siteId: string): CheckInD
 function handleSiteAdded(data: CheckInData, site: Site): CheckInData {
   // 幂等：同 id 的站点已经存在就不加
   if (data.sites.some((s) => s.id === site.id)) return data
+  if (data.sites.some((existing) => siteHost(existing.url) === siteHost(site.url))) return data
   return { ...data, sites: [...data.sites, site] }
 }
 
@@ -102,6 +173,7 @@ function handleSiteUpdated(
 ): CheckInData {
   const idx = data.sites.findIndex((s) => s.id === id)
   if (idx === -1) return data
+  if (patch.url && data.sites.some((site) => site.id !== id && siteHost(site.url) === siteHost(patch.url!))) return data
 
   // id 字段禁止通过 patch 修改 —— 改了会丢掉这个站的全部历史
   const { id: _dropped, ...safePatch } = patch
@@ -129,7 +201,20 @@ function handleSiteRemoved(data: CheckInData, id: string): CheckInData {
 
 function handleTodoAdded(data: CheckInData, day: DateKey, todo: Todo): CheckInData {
   const items = data.todos[day] ?? []
+  if (items.some((item) => item.id === todo.id)) return data
   return { ...data, todos: { ...data.todos, [day]: [...items, todo] } }
+}
+
+export function snapshotDay(data: CheckInData, day: DateKey): CheckInData {
+  const snapshot = data.sites.filter((site) => !site.paused).map((site) => ({ ...site }))
+  if (JSON.stringify(data.targets[day]) === JSON.stringify(snapshot)) return data
+  return { ...data, targets: { ...data.targets, [day]: snapshot } }
+}
+
+function updateTodo(data: CheckInData, day: DateKey, id: string, patch: Partial<Todo>): CheckInData {
+  const items = data.todos[day]
+  if (!items?.some((todo) => todo.id === id)) return data
+  return { ...data, todos: { ...data.todos, [day]: items.map((todo) => todo.id === id ? { ...todo, ...patch } : todo) } }
 }
 
 function handleTodoToggled(data: CheckInData, day: DateKey, id: string): CheckInData {

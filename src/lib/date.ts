@@ -60,3 +60,9 @@ export function addDays(key: DateKey, delta: number): DateKey {
 export function isSameDay(a: DateKey, b: DateKey): boolean {
   return a === b
 }
+
+export function isDateKey(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const parsed = parseDateKey(value)
+  return Number.isFinite(parsed.getTime()) && toDateKey(parsed) === value
+}

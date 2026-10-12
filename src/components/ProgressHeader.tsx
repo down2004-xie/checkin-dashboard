@@ -44,11 +44,11 @@ export function ProgressHeader({
           /* key 固定为 done：只在「这次满签」时挂 celebrate 类播淡入，
              之后随便重渲染都不会重播（类一直在，动画不会重头放） */
           <p className="header__subtitle header__subtitle--celebrate" key="celebrate">
-            {streak > 1 ? `连续 ${streak} 天全部签完 🎉` : '今天全部签完了 🎉'}
+            今天全部签完了 🎉
           </p>
         ) : (
           <p className="header__subtitle">
-            {total === 0 ? '先去 sites.ts 添加站点' : `还有 ${total - done} 个没签`}
+            {total === 0 ? '今天没有签到目标，可添加或恢复站点' : `还有 ${total - done} 个没签`}
           </p>
         )}
       </div>

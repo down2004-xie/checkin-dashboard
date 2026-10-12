@@ -82,6 +82,18 @@ export function normalizeUrl(input: string): string | null {
  * `jd.com` 也会被拒。这是刻意的：表单（`SiteForm`）和书签导入都已经用
  * `normalizeUrl` 补过协议，能进到存储层的值必然带协议。
  * 严格一点只会滤掉被手改坏的数据，不会误伤正常路径。
+ *
+ * ## 一条刻意保留的缝：`https://`（协议合法但缺主机名）会**通过**
+ *
+ * 也就是说 `sanitizeSites` 允许 `https://`、`https://?a=1`、`https://#x`
+ * 这类「有协议没域名」的值进存储。为什么不补齐：
+ * - 修它必须放宽正则（补一个 `[^\s/?#]` 之类的主机名要求），而放宽之后
+ *   `https://` 能过、`https:///` 之流又要另判，白名单会越补越松 ——
+ *   而这条路径**正常输入根本进不来**（表单和书签导入都拦得住）。
+ * - 这些值算不出域名（`siteHost` → null），所以既不能当身份、也不会
+ *   和别的站点撞 id，最坏情况是页面上多一张点了打不开的卡。用户能自己删。
+ * - 真要防的是「可执行的协议」，那条由上面那个 `^https?:` 字面量判断守死了。
+ * 结论：**这是取舍不是遗漏**。以后若放宽 `isSafeHttpUrl`，先回来看这一节。
  */
 export function isSafeHttpUrl(input: string): boolean {
   return /^https?:\/\//i.test(input.trim())

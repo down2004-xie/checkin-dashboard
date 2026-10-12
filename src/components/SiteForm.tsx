@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, type FormEvent } from 'react'
 
 import type { Site } from '../types'
 import { normalizeUrl, siteHost, siteIdFromUrl } from '../lib/site-form'
@@ -13,6 +13,7 @@ interface SiteFormProps {
    * 如果传 id，一旦历史数据里同一个域名有两个不同 id（v2 遗留），就查不出来。
    */
   existingHosts: ReadonlySet<string>
+  existingIds: ReadonlySet<string>
   onSubmit: (site: Site) => void
   onCancel: () => void
 }
@@ -26,13 +27,14 @@ interface SiteFormProps {
  * - id 只在「新增」时生成（由 url 的域名派生），「编辑」沿用原 id ——
  *   id 是历史记录的锚，改了历史就断。
  */
-export function SiteForm({ initial, existingHosts, onSubmit, onCancel }: SiteFormProps) {
+export function SiteForm({ initial, existingHosts, existingIds, onSubmit, onCancel }: SiteFormProps) {
   const [name, setName] = useState(initial?.name ?? '')
   const [url, setUrl] = useState(initial?.url ?? '')
   const [category, setCategory] = useState(initial?.category ?? '')
   const [error, setError] = useState<string | null>(null)
 
-  const handleSubmit = () => {
+  const handleSubmit = (event: FormEvent) => {
+    event.preventDefault()
     const trimmedName = name.trim()
     if (trimmedName === '') {
       setError('站点名称不能为空')
@@ -49,6 +51,10 @@ export function SiteForm({ initial, existingHosts, onSubmit, onCancel }: SiteFor
     // 不拦的话同一个站会出现两张卡、各自记一份签到历史，两边都对不上。
     // 新增和编辑都要查：编辑时把 A 站的网址改成 B 站的域名，同样是重复。
     const host = siteHost(normalized)
+    if (initial && siteHost(initial.url) !== host) {
+      setError('更换网站请新建站点；编辑网址仅支持同域名内修改，以保护历史身份')
+      return
+    }
     if (host !== null && existingHosts.has(host)) {
       setError(`已经有「${host}」的卡片了，同一个网站只能有一张`)
       return
@@ -58,6 +64,10 @@ export function SiteForm({ initial, existingHosts, onSubmit, onCancel }: SiteFor
     const id = initial?.id ?? siteIdFromUrl(normalized)
     if (id === null) {
       setError('网址不合法，取不到域名')
+      return
+    }
+    if (!initial && existingIds.has(id)) {
+      setError('该站点标识已存在，请编辑已有卡片')
       return
     }
 
@@ -71,7 +81,7 @@ export function SiteForm({ initial, existingHosts, onSubmit, onCancel }: SiteFor
   }
 
   return (
-    <div className="site-form">
+    <form className="site-form" onSubmit={handleSubmit}>
       <label className="site-form__field">
         <span className="site-form__label">名称</span>
         <input
@@ -111,13 +121,13 @@ export function SiteForm({ initial, existingHosts, onSubmit, onCancel }: SiteFor
       )}
 
       <div className="site-form__actions">
-        <button type="button" className="btn btn--primary" onClick={handleSubmit}>
+        <button type="submit" className="btn btn--primary">
           {initial ? '保存' : '添加'}
         </button>
         <button type="button" className="btn" onClick={onCancel}>
           取消
         </button>
       </div>
-    </div>
+    </form>
   )
 }

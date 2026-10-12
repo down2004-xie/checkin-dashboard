@@ -15,8 +15,9 @@ import { useEffect } from 'react'
  * 光源会停在最后位置。这里在触摸设备上直接不启用，
  * 由 CSS 的 media 查询负责给移动端一个静态的居中光源。
  */
-export function usePointerLight() {
+export function usePointerLight(enabled = true) {
   useEffect(() => {
+    if (!enabled) return
     // 触屏设备跳过：没有持续跟随的指针，跟随效果无意义还费性能
     if (window.matchMedia('(hover: none)').matches) return
 
@@ -46,5 +47,5 @@ export function usePointerLight() {
       window.removeEventListener('pointermove', onPointerMove)
       if (frame !== 0) cancelAnimationFrame(frame)
     }
-  }, [])
+  }, [enabled])
 }

@@ -1,45 +1,35 @@
+import type { SiteFilters, SiteSort, SiteStatus } from '../lib/sites'
+
 interface FilterBarProps {
-  /** 所有去重后的分类，从站点清单里收集 */
   categories: string[]
-  /** 当前选中分类，null 表示「全部」 */
-  active: string | null
-  onSelect: (category: string | null) => void
+  filters: SiteFilters
+  count: number
+  onChange: (patch: Partial<SiteFilters>) => void
 }
 
-/**
- * 分类筛选条。
- *
- * 为什么 state 放在 App 而不是这里：
- * 筛选结果要传给 SiteGrid 决定渲染哪些卡片，属于跨组件的共享状态，
- * 所以由 App 持有 active、这里只做展示和回调。保持组件无状态、好复用。
- */
-export function FilterBar({ categories, active, onSelect }: FilterBarProps) {
-  if (categories.length === 0) return null
-
+export function FilterBar({ categories, filters, count, onChange }: FilterBarProps) {
   return (
-    <div className="filter" role="tablist" aria-label="按分类筛选">
-      <button
-        type="button"
-        className={`chip${active === null ? ' chip--active' : ''}`}
-        role="tab"
-        aria-selected={active === null}
-        onClick={() => onSelect(null)}
-      >
-        全部
-      </button>
-
-      {categories.map((category) => (
-        <button
-          key={category}
-          type="button"
-          className={`chip${active === category ? ' chip--active' : ''}`}
-          role="tab"
-          aria-selected={active === category}
-          onClick={() => onSelect(category)}
-        >
-          {category}
-        </button>
-      ))}
-    </div>
+    <section className="site-tools" aria-label="查找站点">
+      <div className="toolbar">
+        <input type="search" className="site-form__input search" aria-label="搜索站点名称或网址"
+          placeholder="搜索站点名称或网址…" value={filters.query} onChange={(event) => onChange({ query: event.target.value })} />
+        <select aria-label="签到状态" value={filters.status} onChange={(event) => onChange({ status: event.target.value as SiteStatus })}>
+          <option value="all">全部状态</option><option value="pending">未签到</option>
+          <option value="done">已签到</option><option value="paused">已暂停</option>
+        </select>
+        <select aria-label="站点排序" value={filters.sort} onChange={(event) => onChange({ sort: event.target.value as SiteSort })}>
+          <option value="manual">手动顺序</option><option value="name">名称排序</option><option value="pending">未签到优先</option>
+        </select>
+        <span className="muted">{count} 个站点</span>
+      </div>
+      <div className="filter" role="group" aria-label="按分类筛选">
+        <button type="button" className={`chip${filters.category === null ? ' chip--active' : ''}`}
+          aria-pressed={filters.category === null} onClick={() => onChange({ category: null })}>全部分类</button>
+        {categories.map((category) => (
+          <button key={category} type="button" className={`chip${filters.category === category ? ' chip--active' : ''}`}
+            aria-pressed={filters.category === category} onClick={() => onChange({ category })}>{category || '未分类'}</button>
+        ))}
+      </div>
+    </section>
   )
 }

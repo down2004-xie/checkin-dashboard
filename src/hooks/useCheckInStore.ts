@@ -1,103 +1,81 @@
-import { useCallback, useEffect, useReducer, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import type { CheckInData, DateKey } from '../types'
+import type { CheckInAction } from '../lib/reducer'
+import { commitAction, readData, recoverData, STORAGE_KEY, type SaveResult } from '../lib/storage'
 
-import type { CheckInData, DateKey, Site, Todo } from '../types'
-import { applyAction } from '../lib/reducer'
-import { loadData, saveData } from '../lib/storage'
+export function useCheckInStore(today: DateKey) {
+  const [snapshot, setSnapshot] = useState(readData)
+  const current = useRef(snapshot)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState(0)
+  const queue = useRef(Promise.resolve())
 
-/**
- * 签到状态的唯一数据源。
- *
- * 设计要点：
- * 1. 读用 useReducer 的惰性初始化 —— 首次渲染才读一次 localStorage，
- *    而不是每次渲染都读（localStorage 是同步 API，频繁调用会阻塞主线程）。
- * 2. 写收敛到 lib/reducer.ts 的纯函数里：applyAction 的签名恰好就是
- *    (state, action) => newState，可以直接当 React 的 reducer 用。
- * 3. 对外只暴露语义化操作，不暴露 dispatch，防止组件绕过纯函数直接改状态。
- *
- * saveError 为什么需要：localStorage 在隐私模式下写入会抛异常。
- * 静默失败最糟 —— 用户签了一整天，关掉浏览器全没了还以为存上了。
- */
-export function useCheckInStore() {
-  const [data, dispatch] = useReducer(
-    applyAction,
-    undefined,
-    () => loadData(),
-  )
-  const [saveError, setSaveError] = useState(false)
+  const accept = useCallback((result: SaveResult) => {
+    current.current = result.snapshot
+    setSnapshot(result.snapshot)
+    setError(result.error ?? null)
+    return result.ok
+  }, [])
+
+  const run = useCallback((action: CheckInAction): Promise<boolean> => {
+    setPending((count) => count + 1)
+    const operation = queue.current.then(async () => {
+      try {
+        /**
+         * `current.current.raw` 是**在队列闭包执行时**读的，不是 `run()` 被调用时 ——
+         * 这一点必须保住。队列是串行的，连着点两下时第二次 `run()` 会在第一次
+         * 还没写盘前就被调用；如果在那时就把 raw 取出来当「期望值」，
+         * 没有 `navigator.locks` 的浏览器上 `commitAction` 的陈旧写入检查
+         * 会把第二次操作判成「其他页面更新了数据」而静默不保存。
+         * 改动这里时别把参数提到 `.then()` 外面去。
+         */
+        return accept(await commitAction(action, today, current.current.raw))
+      } catch {
+        setError('未能获取存储写入权限，本次操作没有保存，请重试')
+        return false
+      } finally {
+        setPending((count) => count - 1)
+      }
+    })
+    queue.current = operation.then(() => undefined)
+    return operation
+  }, [accept, today])
+
+  const refresh = useCallback(() => {
+    const next = readData()
+    current.current = next
+    setSnapshot(next)
+    setError(null)
+  }, [])
 
   useEffect(() => {
-    const ok = saveData(data)
-    setSaveError(!ok)
-  }, [data])
+    const onStorage = (event: StorageEvent) => {
+      if (event.key === STORAGE_KEY || event.key === null) refresh()
+    }
+    window.addEventListener('storage', onStorage)
+    window.addEventListener('focus', refresh)
+    return () => {
+      window.removeEventListener('storage', onStorage)
+      window.removeEventListener('focus', refresh)
+    }
+  }, [refresh])
 
-  const toggle = useCallback(
-    (day: DateKey, siteId: string) => dispatch({ type: 'toggled', day, siteId }),
-    [],
-  )
+  useEffect(() => {
+    if (!current.current.issue) void run({ type: 'dayStarted', day: today })
+  }, [run, today])
 
-  /** 新增站点（表单校验通过后调用）。 */
-  const addSite = useCallback(
-    (site: Site) => dispatch({ type: 'siteAdded', site }),
-    [],
-  )
+  const recover = useCallback(async (data: CheckInData, expectedRaw: string | null) => {
+    setPending((count) => count + 1)
+    try {
+      await queue.current
+      return accept(await recoverData(data, expectedRaw))
+    } catch {
+      setError('恢复失败，请保留原始文件并检查浏览器权限')
+      return false
+    } finally {
+      setPending((count) => count - 1)
+    }
+  }, [accept])
 
-  /** 批量新增站点（书签导入）。一次 dispatch 写完，不做 N 次循环。 */
-  const addSites = useCallback(
-    (sites: Site[]) => dispatch({ type: 'sitesAdded', sites }),
-    [],
-  )
-
-  /** 修改站点。id 不可改，patch 里带 id 会被忽略（见 reducer）。 */
-  const updateSite = useCallback(
-    (id: string, patch: Partial<Site>) => dispatch({ type: 'siteUpdated', id, patch }),
-    [],
-  )
-
-  /** 删除站点。历史签到记录保留，见 reducer 注释。 */
-  const removeSite = useCallback(
-    (id: string) => dispatch({ type: 'siteRemoved', id }),
-    [],
-  )
-
-  /** 整体替换数据。用于导入备份。 */
-  const replaceAll = useCallback(
-    (next: CheckInData) => dispatch({ type: 'replaced', data: next }),
-    [],
-  )
-
-  /**
-   * 新增待办。传入的 todo 由调用方用 `createTodo()` 造好（id 在里面生成）——
-   * 这里不代劳，是为了让「怎么造一条待办」这件事只有一个出处（lib/todo.ts），
-   * hook 只负责把它 dispatch 出去。
-   */
-  const addTodo = useCallback(
-    (day: DateKey, todo: Todo) => dispatch({ type: 'todoAdded', day, todo }),
-    [],
-  )
-
-  /** 勾选 / 取消勾选一条待办 */
-  const toggleTodo = useCallback(
-    (day: DateKey, id: string) => dispatch({ type: 'todoToggled', day, id }),
-    [],
-  )
-
-  /** 删除一条待办 */
-  const removeTodo = useCallback(
-    (day: DateKey, id: string) => dispatch({ type: 'todoRemoved', day, id }),
-    [],
-  )
-
-  return {
-    data,
-    toggle,
-    addSite,
-    addSites,
-    updateSite,
-    removeSite,
-    replaceAll,
-    addTodo,
-    toggleTodo,
-    removeTodo,
-    saveError,
-  }
+  return { data: snapshot.data, issue: snapshot.issue, raw: snapshot.raw, error, busy: pending > 0, run, recover, refresh }
 }

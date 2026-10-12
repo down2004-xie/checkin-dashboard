@@ -22,15 +22,22 @@ export function useToday(): DateKey {
   const [today, setToday] = useState<DateKey>(() => todayKey())
 
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const update = () => {
       setToday((prev) => {
         const next = todayKey()
         // 返回同一引用 → React bail out，不触发重渲染
         return next === prev ? prev : next
       })
-    }, 60_000)
+    }
+    const id = window.setInterval(update, 60_000)
+    window.addEventListener('focus', update)
+    document.addEventListener('visibilitychange', update)
 
-    return () => window.clearInterval(id)
+    return () => {
+      window.clearInterval(id)
+      window.removeEventListener('focus', update)
+      document.removeEventListener('visibilitychange', update)
+    }
   }, [])
 
   return today

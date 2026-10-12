@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CheckInData } from '../types'
-import { DATA_VERSION } from '../types'
+import { DATA_VERSION, DEFAULT_PREFERENCES } from '../types'
 import {
   backupFilename,
   createBackup,
@@ -11,7 +11,7 @@ import {
 } from './backup'
 
 function makeData(records: Record<string, string[]>): CheckInData {
-  return { version: DATA_VERSION, records, sites: [], todos: {} }
+  return { version: DATA_VERSION, records, sites: [], todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
 }
 
 describe('createBackup / serializeBackup', () => {
@@ -158,10 +158,10 @@ describe('mergeData', () => {
     expect(mergeData(a, makeData({})).records).toEqual(a.records)
   })
 
-  it('版本号取较大值', () => {
-    const a: CheckInData = { version: 1, records: {}, sites: [], todos: {} }
-    const b: CheckInData = { version: 2, records: {}, sites: [], todos: {} }
-    expect(mergeData(a, b).version).toBe(2)
+  it('合并产物采用当前数据版本', () => {
+    const a: CheckInData = { version: 1, records: {}, sites: [], todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+    const b: CheckInData = { version: 2, records: {}, sites: [], todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+    expect(mergeData(a, b).version).toBe(DATA_VERSION)
   })
 
   it('sites 按 id 并集去重，a 的顺序在前', () => {
@@ -170,6 +170,7 @@ describe('mergeData', () => {
       records: {},
       sites: [{ id: 'a', name: 'A', url: 'https://a' }],
       todos: {},
+      targets: {}, preferences: { ...DEFAULT_PREFERENCES },
     }
     const b: CheckInData = {
       version: 2,
@@ -179,6 +180,7 @@ describe('mergeData', () => {
         { id: 'a', name: 'A2', url: 'https://a2' }, // 与 a 里同 id，应被去重（保留 a 的）
       ],
       todos: {},
+      targets: {}, preferences: { ...DEFAULT_PREFERENCES },
     }
     const merged = mergeData(a, b)
     expect(merged.sites.map((s) => s.id)).toEqual(['a', 'b'])
@@ -189,7 +191,7 @@ describe('mergeData 合并待办', () => {
   const todo = (id: string, text: string, done = false) => ({ id, text, done })
 
   function withTodos(todos: Record<string, { id: string; text: string; done: boolean }[]>) {
-    return { version: DATA_VERSION, records: {}, sites: [], todos }
+    return { version: DATA_VERSION, records: {}, sites: [], todos, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
   }
 
   it('两边不同天的待办都保留', () => {

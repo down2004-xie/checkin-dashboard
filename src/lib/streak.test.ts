@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { CheckInData } from '../types'
-import { DATA_VERSION } from '../types'
+import { DATA_VERSION, DEFAULT_PREFERENCES } from '../types'
 import {
   calcLongestStreak,
   calcStreak,
@@ -12,7 +12,7 @@ import {
 
 /** 造测试数据的小工具：传日期列表，生成对应的 records */
 function makeData(days: Record<string, string[]>): CheckInData {
-  return { version: DATA_VERSION, records: days, sites: [], todos: {} }
+  return { version: DATA_VERSION, records: days, sites: [], todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
 }
 
 describe('hasCheckedIn', () => {

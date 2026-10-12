@@ -16,6 +16,17 @@ interface GlassCardProps {
   onEdit: (siteId: string) => void
   /** 请求删除该站 */
   onRemove: (siteId: string) => void
+  onUpdate: (siteId: string, patch: Partial<Site>) => void
+  /**
+   * 和另一个站点交换位置。**传的是对方 id，不是 ±1 方向** ——
+   * 「谁算相邻」由 SiteGrid 按**当前可见列表**算好（见 lib/sites.ts 的 moveNeighbor），
+   * 卡片只负责把结果 `null` / `undefined` 翻译成按钮禁用。
+   */
+  onMove: (siteId: string, targetId: string) => void
+  /** 前移的目标 id；null 表示不能前移（已在可见列表首位或跨了置顶分组） */
+  moveUpTargetId: string | null
+  /** 后移的目标 id；null 表示不能后移 */
+  moveDownTargetId: string | null
 }
 
 /**
@@ -38,6 +49,10 @@ export function GlassCard({
   onToggle,
   onEdit,
   onRemove,
+  onUpdate,
+  onMove,
+  moveUpTargetId,
+  moveDownTargetId,
 }: GlassCardProps) {
   const { handlePointerMove, handlePointerLeave } = useCardHighlight()
 
@@ -61,7 +76,7 @@ export function GlassCard({
 
   return (
     <div
-      className={`card${checked ? ' card--done' : ''}`}
+      className={`card${checked ? ' card--done' : ''}${site.paused ? ' card--paused' : ''}`}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
@@ -100,6 +115,7 @@ export function GlassCard({
             type="button"
             className={`card__toggle${popping ? ' card__toggle--pop' : ''}`}
             onClick={() => onToggle(site.id)}
+            disabled={site.paused}
             aria-pressed={checked}
             aria-label={checked ? `取消签到 ${site.name}` : `标记已签到 ${site.name}`}
             onAnimationEnd={() => setPopping(false)}
@@ -110,6 +126,8 @@ export function GlassCard({
       </div>
 
       <div className="card__meta">
+        {site.pinned && <span className="card__tag">置顶</span>}
+        {site.paused && <span className="card__tag">已暂停</span>}
         {site.category && <span className="card__tag">{site.category}</span>}
         {siteStreak > 0 && (
           <span className="card__stat card__stat--streak">连续 {siteStreak} 天</span>
@@ -118,6 +136,15 @@ export function GlassCard({
           <span className="card__stat">累计 {totalDays} 天</span>
         )}
       </div>
+      <details className="card__manage">
+        <summary>管理站点</summary>
+        <div className="toolbar">
+          <button type="button" className="chip" onClick={() => onUpdate(site.id, { pinned: !site.pinned })}>{site.pinned ? '取消置顶' : '置顶'}</button>
+          <button type="button" className="chip" onClick={() => onUpdate(site.id, { paused: !site.paused })}>{site.paused ? '恢复签到' : '暂停签到'}</button>
+          <button type="button" className="chip" disabled={!moveUpTargetId} aria-label={`前移 ${site.name}`} onClick={() => moveUpTargetId && onMove(site.id, moveUpTargetId)}>前移</button>
+          <button type="button" className="chip" disabled={!moveDownTargetId} aria-label={`后移 ${site.name}`} onClick={() => moveDownTargetId && onMove(site.id, moveDownTargetId)}>后移</button>
+        </div>
+      </details>
     </div>
   )
 }

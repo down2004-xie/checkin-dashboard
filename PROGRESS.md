@@ -23,11 +23,15 @@
 - [~] 阶段 15：部署到 GitHub Pages + 绑定二级域名（站点已上线 2026-10-02；二级域名未绑）
 - [x] 阶段 17：樱花装饰 —— 背景樱花树 + 前景飘落花瓣 + 满签爆发（2026-10-06）
 - [x] 阶段 18：数据契约升 v4 —— 按天的每日待办（2026-10-07）
+- [x] 阶段 18.5：数据契约升 v5 —— 每日目标快照 `targets` + 偏好设置 `preferences`
+- [x] 阶段 19：v5 改动的代码审查 + 修复（#12 白屏 / #13 误锁只读 / #14 去重放错层，
+      外加 6 条 UI 与契约遗留）+ 浏览器回归脚本转正（2026-10-12）
 - [ ] 阶段 16（v4）：真折射玻璃实测、亮色主题、清理孤儿记录
 
 > 编号说明：16 是早就预留的「v4 杂项」桶，17 是临时插入的装饰功能，
-> 18 是待办。**不重编号** —— 「留到阶段 16」这句话在
-> MY-ISSUES 和本文的已知缺口表里被引用了好几处，改号会造成指向错误。
+> 18 是待办，18.5 和 19 是 2026-10-12 补的。**不重编号** ——
+> 「留到阶段 16」这句话在 MY-ISSUES 和本文的已知缺口表里被引用了好几处，
+> 改号会造成指向错误。
 >
 > ⚠️ 「阶段 18 的 v4」和「阶段 16 的 v4」不是一回事：阶段 16 里那个
 > 「v4」指的是早就想做的**一篮子杂项**（真折射玻璃、亮色主题……），
@@ -36,8 +40,10 @@
 
 ## 当前进度
 
-**阶段 2~14 已全部写完，自动化验证通过。阶段 15 的「部署」已完成，站点已上线；
-「绑定二级域名」未做。浏览器人工验收仍未完成。**
+**阶段 2~14、17、18、18.5、19 已全部写完，自动化验证通过。
+阶段 15 的「部署」已完成，站点已上线；「绑定二级域名」未做。
+浏览器的人工验收大部分已被 `npm run test:browser`（23 项）接管，
+剩几条必须人手点的见「下一步」。**
 
 自动化验证结果（2026-10-02，阶段 14 结束时）：
 - `npx vitest run` → 11 个测试文件 / 158 个用例全通过
@@ -130,6 +136,72 @@
   ProgressHeader 的弧和百分比由同一补间值驱动（aria-label 仍用真实值）；
   删掉 `.ring` 上对 conic-gradient 无效的安慰剂 transition。
 
+自动化验证结果（2026-10-12，v5 改动代码审查 + 修 #12/#13 之后）：
+- `npx vitest run` → 15 个测试文件 / **274 个用例**全通过
+  （新增 3 条：`sanitizePreferences` 拒数组/拒假 toString、
+  `droppedEntries` 只数真丢的、保护模式不误触发 + 反面守「真坏的仍要报」）
+- `npx tsc --noEmit` → 退出码 0
+- `npx vite build` → 成功（JS 276.1 KB / gzip 87.6 KB，CSS 22.6 KB / gzip 5.2 KB）
+- **修复的两条**（细节见 MY-ISSUES #12/#13）：
+  - `sanitizePreferences` 的 `includes(String(x))` 会让**数组**通过校验 →
+    `PALETTES[['auto']]` 为 undefined → 整页白屏。改成先 `typeof` 再 `includes`
+  - 保护模式的判据从「清洗前后长度差」换成 `droppedEntries`（只数真的读不回来的），
+    无害去重不再把用户锁进只读模式；`sanitizeSites` 与它共用同一个 `isUsableSite`
+- **两条新测试都做了「注入旧实现会变红」的反验**（不是只写了永远通过的断言）
+- ⚠️ 本次审查还留了 7 条未修，已全部记进 MY-ISSUES 待解决表
+  （热力图 range 与网格不一致、筛选下移动顺序、键盘漫游失效、
+  `sanitizeSites` 不校验域名派生、无 locks 浏览器吞操作、文档版本落后、`toggled` 死代码）
+
+自动化验证结果（2026-10-12，审查遗留 7 条全部修完）：
+- `npx vitest run` → 15 个测试文件 / **284 个用例**全通过
+- `npx tsc --noEmit` → 退出码 0
+- `npx vite build` → 成功（JS 276.6 KB / gzip 87.7 KB）
+- **改动**（细节见 MY-ISSUES #14 与待解决表）：
+  - 热力图：`weeks` 成为唯一口径（下拉框改 4/13/26 周），`buildHeatmap` 删掉
+    早已失效的第三个参数，新增 `groupByWeek` / `monthLabel`，网格和统计
+    吃的是同一批格子 —— 以前选「近 7 天」只改文字、26 周网格一格不动
+  - 移动站点：新增 `moveNeighbor`，邻居按**可见列表**算（以前拿未筛选的全集比索引，
+    会亮起一个点了没效果的按钮、还悄悄改掉屏幕外的顺序）；
+    并拒绝跨「置顶/普通」分组互换（换了屏幕上也不动）
+  - 热力图键盘漫游：`focusKey` 改为可推导的纯值，不再在 render 阶段读 `refs.current`
+  - `sanitizeSites` 补上按域名去重，但**必须放在迁移梯子之后**（放前面会让
+    v2 数据的记录变孤儿 → 静默少一天签到，见 #14）
+  - `useCheckInStore` 的 `expectedRaw` 改为在队列闭包内读（无 `navigator.locks`
+    的浏览器上，连点两次会吞掉第二次）
+  - `reducer.ts` 删掉死 action `toggled`；测试改写为 `checkedSet`
+- ⚠️ 只剩一条真正的已知边界：`sanitizeSites` 允许 `https://`（协议合法但缺 host）
+  这种 URL 通过（它算不出域名，没法判身份）。不修的理由：正常输入进不来
+  （`normalizeUrl` / `parseBookmarks` 都会拦），放宽白名单又会让
+  「空协议字符串」有缝可钻 —— 详细取舍见 `isSafeHttpUrl` 的注释
+
+自动化验证结果（2026-10-12，浏览器端回归 **22 → 23 项**）：
+- **`npm run test:browser` → 23 项场景全过**，浏览器是 Edge
+  （Chromium 内核，CDP 驱动，脚本 `scripts/browser-check.mjs`）
+- 新增 8 项，全部对应这一轮改掉的东西 —— 它们**都是单测够不着的**
+  （要真渲染 + 真读 localStorage），也**都是肉眼看不出来的**：
+
+  | 场景 | 守的是 |
+  |---|---|
+  | Array-valued preferences fall back instead of white-screening | #12 白屏 |
+  | Harmless duplicates no longer latch protection mode | #13 误锁只读 |
+  | Genuinely unreadable entries still trigger protection | #13 的反面（别修过头） |
+  | Move buttons follow the filtered visible list | 筛选下移动顺序 |
+  | Moving swaps with the visible neighbour | 移动真的生效且网格跟着变 |
+  | Pinned sites cannot be swapped across the boundary | 置顶分组不可跨 |
+  | Two clicks in one tick persist without Web Locks | 无 locks 浏览器吞操作 |
+  | Stat range drives the grid itself | 热力图 range 与网格一致 |
+
+- **其中 3 条做了「注入旧实现会变红」的反验**（不是只写了永远通过的断言）：
+  - 按可见列表与否的按钮状态 → 改回按全集判断后**变红**
+  - 热力图 range → 网格写死 26 周后**变红**
+  - `expectedRaw` 提到队列外 → `Error: Queued clicks without Web Locks lost a checkin`
+- 截图：`shots/regression/desktop.png`（1440）和 `mobile.png`（390×844），已 gitignore
+- ⚠️ **顺序陷阱**：`test:browser` 跑的是 `vite preview`，即 **`dist/` 里的旧产物**。
+  改完源码必须先 `npm run build` 再跑，否则验的是上一版 —— 第一轮注入反验就
+  因此假绿过一次（先跑脚本、后补构建顺序）。已在脚本外的流程里记住。
+- ⚠️ 脚本仍未纳入 CI（见「已知缺口」）：它要起服务 + 起浏览器，和
+  「纯函数单测」是两个层次的成本
+
 ## 部署状态
 
 - 站点地址：https://down2004-xie.github.io/checkin-dashboard/
@@ -171,12 +243,37 @@ Vitest 默认跑在 node 环境没有这个 API（已确认 Node v22.17.0 下 `t
 - [ ] **在真实手机上过一遍**（我只在 Chromium 的移动端视口里验过，没用真机）
 
 阶段 14 新增（迁移 + 身份）：
-- [ ] **打开页面无报错，原有卡片都还在、签到记录没丢**
-- [ ] **DevTools → Application → Local Storage → 看存的 JSON，`version` 是 3、站点 id 是 `jd-com` 这种形态**
+- [x] **打开页面无报错，原有卡片都还在、签到记录没丢** —— 对应浏览器场景
+      `Fresh load migrates to v5 and creates today target snapshot`
+- [x] **DevTools → Application → Local Storage → 看存的 JSON，
+      `version` 是 5、站点 id 是 `jd-com` 这种形态** —— 同上，脚本里直接断言了
 - [ ] **删掉一张卡片，再用同样的网址加回来 → 「连续 N 天」和「累计」没归零，今天已勾的也还在**
+      （单测里 `reducer.test.ts` 有端到端守，但**没在真浏览器里点过**，留手工）
 - [ ] **用同一个域名的不同路径加两个站（如 `jd.com` 和 `jd.com/index.html`）→ 提示「已经有 jd.com 的卡片了」**
 - [ ] **编辑一张卡片，只改分类不改网址 → 能保存成功**（不能被自己的域名判成重复）
 - [ ] 编辑卡片把网址改成另一张卡的域名 → 应该被拦下
+
+阶段 19（2026-10-12 代码审查修复）新增：
+- [x] **把 localStorage 里的 `preferences.theme` 手改成 `["auto"]` → 刷新，
+      页面正常打开并退回默认主题**（以前是整页白屏）—— 场景
+      `Array-valued preferences fall back`
+- [x] **`records` 里塞一条重复 id → 刷新，管理区照常可用**（以前会被锁成只读）—— 场景
+      `Harmless duplicates no longer latch protection mode`
+- [x] **`records` 里塞一个 `5`（不是字符串）→ 刷新，进保护模式且拒绝写入** —— 场景
+      `Genuinely unreadable entries still trigger protection`
+- [x] **筛到只剩一张卡 → 「前移/后移」都置灰**（以前按全集算索引，会亮着）—— 场景
+      `Move buttons follow the filtered visible list`
+- [x] **在「手动顺序」下点「前移」→ 卡片真的换了位，网格顺序跟着变** —— 场景
+      `Moving swaps with the visible neighbour`
+- [x] **置顶站和普通站之间不能互换**（换了屏幕上也不动，所以按钮置灰）—— 场景
+      `Pinned sites cannot be swapped across the pinned boundary`
+- [x] **把「统计范围」从近 26 周改成近 4 周 → 网格列数从 26 变成 4** —— 场景
+      `Stat range drives the grid itself`
+- [x] **同一帧内连点两张卡 → 两个都保存上**（脚本里先把 `navigator.locks` 藏掉）—— 场景
+      `Two clicks in one tick both persist without Web Locks`
+
+> 上面带 `[x]` 的都是 2026-10-12 的 `scripts/browser-check.mjs` 自动跑过的
+> （23 项），不再需要人工点。留 `[ ]` 的是脚本没覆盖、**必须人手点一次**的。
 
 阶段 13 新增：
 - [ ] **点「从书签导入」选 `fixtures/sample-bookmarks.html`，面板弹出且显示「共解析 13 条」**
@@ -203,18 +300,26 @@ Vitest 默认跑在 node 环境没有这个 API（已确认 Node v22.17.0 下 `t
 
 ## 下一步（下次开工第一件事）
 
-1. **先跑一遍自动化确认基线是绿的**：`npm test && npm run build`
-   （当前应为 13 文件 / 225 用例、构建成功）
-2. **把改动推到线上** —— 樱花（阶段 17）、待办（阶段 18）和 #8 的安全修复
+1. **先跑一遍自动化确认基线是绿的**：
+   `npm test && npm run build && npm run test:browser`
+   （当前应为 15 文件 / 284 用例、构建成功、23 项浏览器场景通过。
+   **注意顺序**：`test:browser` 跑的是 `dist/`，必须先 build）
+2. **把改动推到线上** —— 樱花（阶段 17）、待办（阶段 18）、数据契约升 v5、
+   #8/#12/#13/#14 的安全与数据保护修复，以及阶段 19 的一批 UI 修复
    都还在本地，线上跑的是旧版本
 3. **在真实手机上打开线上站点看一眼** —— 樱花这块的移动端降级我只在
    Chromium 的移动端视口里验过，真机的 GPU 和视口行为可能不同（已知缺口表里有这条）
-4. **浏览器人工验收**（始终未做）：先过「阶段 14 新增」那 6 项（**优先**：迁移会改写
-   localStorage，出问题要第一时间发现），再过「阶段 13 新增」6 项（用 `fixtures/`
-   样本，不必碰真实书签）
+4. **剩下的人工验收**（自动化已经吃掉大部分，现在只剩下面这些）：
+   - 阶段 14：「删掉再加能接回历史」和三条表单判重的提示文案（4 条，见上方清单）
+   - 阶段 13：书签导入面板的 6 条（用 `fixtures/sample-bookmarks.html`，不必碰真实书签）
+   - 前几轮遗留里还没被脚本覆盖的：点卡片跳转、悬停高光跟随指针、v1 老备份导入
 5. 验收没问题后绑定二级域名 —— 需要先确定「完整域名」和「DNS 在哪家服务商」，
    两处都要配：DNS 的 CNAME 记录 + 仓库里的 `public/CNAME` 文件（`public/` 目录
    目前不存在，要新建）
+
+> MY-ISSUES 待解决表里的 **🟠 待修** 已在本轮全部清空（7 条全修 + #14），
+> 表里剩下的都是 `🟦 暂时绕过 / 无法解决`，属于「想清楚了才留的」，
+> 不需要再排优先级。
 
 ## 关键决策记录
 
@@ -281,22 +386,21 @@ Vitest 默认跑在 node 环境没有这个 API（已确认 Node v22.17.0 下 `t
 | 真折射玻璃（SVG feDisplacementMap / WebGL） | 阶段 16 | Chrome 是否支持 `backdrop-filter: url()` **仍未实测**，需先做兼容性实验 |
 | 跨设备同步 | 阶段 16 | 需接 Supabase / Firebase 免费层 |
 | 清理孤儿记录 | 阶段 16 | 删站点后 records 里留着它的历史。当前刻意保留，需要一个「清理未使用站点的记录」按钮 |
-| 热力图存「当天站点总数」 | 阶段 16 | 现在用「当天已签数 / 当前站点总数」，增删站点会让历史格子深浅变化 |
-| 站点拖拽排序 | 阶段 16 | sites 已是数组、顺序已持久化，加拖拽不难，属于纯交互增强 |
+| 热力图存「当天站点总数」 | ✅ 已解决（v5） | v5 的 `targets` 快照已经在数据层解决：`summarizeDay` 优先读当天的目标快照，增删站点不会再改写历史格子的深浅。没有快照的老记录显示「目标未知」而不推测 —— 刻意不伪造历史 |
+| 站点拖拽排序 | 阶段 16 | sites 已是数组、顺序已持久化，加拖拽不难，属于纯交互增强。现在的「前移/后移」按钮已经能调顺序（且按可见列表算邻居） |
 | IndexedDB + storage.persist() | 阶段 16 | 降低 localStorage 被清概率，当前数据量属过度设计 |
 | 环境光传感器（AmbientLightSensor） | 仅作彩蛋 | MDN 标注实验性、非 Baseline，不能作为依赖 |
-| `parseBookmarks` 的 DOM 解析层无单测 | 阶段 16 | 依赖 `DOMParser`，node 环境没有。刻意不装 jsdom，靠浏览器人工验收；有风险的部分已圈到最小（只有这一个函数） |
-| storage.ts 的浏览器环境单测 | 阶段 16 | 需 jsdom 或 mock localStorage，当前只测了纯函数部分 |
+| `parseBookmarks` 的 DOM 解析层无单测 | ⚠️ 部分解决 | 依赖 `DOMParser`，node 环境没有。刻意不装 jsdom。**2026-10-12 起有兜底**：`npm run test:browser` 里有一项在真实浏览器里跑它（`Bookmark HTML parser renders an import plan in a real browser`），不再是纯人工 |
+| storage.ts 的浏览器环境单测 | ✅ 已补（2026-10-12） | v5 改动引入了 `protected persistence` 一组共 16 条：用手写的 Map 假 localStorage + `vi.stubGlobal` 覆盖了读保护、配额满、无 locks 时的陈旧写入、多标签串行、恢复前归档、快照不重复落盘 |
 | 亮色主题 | 阶段 16 | 需要重做玻璃卡片的对比度体系 |
 | v3 迁移前就已删除的站点，历史永久失联 | 不处理 | 迁移要算新身份得有 url，孤儿记录里只有一个旧 id，信息在删除那刻就丢了。**v3 之后不会再有这个问题**（删了再加能接回），但迁移前丢的补不回来 |
-| 迁移在真实 localStorage 上的行为无自动测试 | 阶段 16 | 单测覆盖了 `migrate()` 本身（20 条），但「storage 读取 → migrate → 渲染」这条真实链路要靠人工开一次页面 |
-| 樱花的**视觉**效果无自动化验收 | 阶段 16 | `lib/sakura.ts` 的生成逻辑有 27 条单测（确定性 + 方向分散度），但「树看起来像不像树」「爆发像不像从树下涌起」只能靠人眼。项目刻意不引入 jsdom，视觉回归要额外引 Playwright + 基线图管理，对当前体量不划算。本次用临时脚本人工验收，截图在 `shots/`（不在构建产物里） |
+| 迁移在真实 localStorage 上的行为 | ⚠️ 部分解决（2026-10-12） | `npm run test:browser` 的第一项就跑通了「空库打开 → 落盘 v5 → 建当天快照」，真实链路有覆盖了。**没覆盖的是「老版本真实数据升上来」** —— 单测里 v1→v5 有链式测试，但没在真浏览器里塞一份 v1 的 localStorage 跑过 |
+| 樱花的**视觉**效果无自动化验收 | 阶段 16 | `lib/sakura.ts` 的生成逻辑有 27 条单测（确定性 + 方向分散度），但「树看起来像不像树」「爆发像不像从树下涌起」只能靠人眼。项目刻意不引入 jsdom，视觉回归要额外引 Playwright + 基线图管理，对当前体量不划算。现在 `npm run test:browser` 会截 `desktop.png` / `mobile.png` 两张图，但那只是**留档**，没有基线比对 |
 | 樱花在**真机**上的表现未验证 | 阶段 16 | 移动端降级只在 Chromium 的移动端视口里验过（390×844）。真机的 GPU 合成、`backdrop-filter` 支持度、滚动性能都可能不同。上线后拿手机开一次即可 |
 | 移动端树的压淡系数是口味值 | 阶段 16 | `sakura.css` 里 0.26 这个数是照截图调的，没有可量化判据。改一个数就能调 |
+| 浏览器回归脚本未进 CI | 阶段 16 | `npm run test:browser`（23 项，`scripts/browser-check.mjs`）已能一条命令跑完并自清理。不并入 `npm test` 的原因：它要起服务 + 起浏览器，会让纯函数单测从 2 秒变分钟级。要进 CI 应该单开一个 job |
 | 待办只能看「今天」，没有历史回顾 | 待定 | 数据按天存着，历史都在 localStorage 里，加一个折叠列表就能看。当前刻意不做：待办是「今天要做什么」的即时清单，翻昨天的没意义（没做完的应该今天重记一条） |
-| 待办不能编辑文本，只能删了重加 | 待定 | 只做了增/勾/删。加编辑要么行内变输入框、要么弹窗，是个纯交互活，不涉及存储结构 |
 | 待办没有排序 / 拖拽 / 优先级 | 待定 | 当前按添加顺序。排序要往 `Todo` 上加字段（或改数组顺序的持久化方式），属于功能扩张，先不做 |
-| 待办没有「顺延未完成项」的功能 | 待定 | 昨天没勾的不会自动出现在今天。做的话要决定「自动顺延」还是「手动一键搬过来」，是个产品决定不是技术阻碍 |
 
 ## 验证方式
 
@@ -327,10 +431,11 @@ npm test
 ```
 
 覆盖：日期换算（含跨时区/跨月/跨年/闰年）、连续天数算法（全局 + 单站）、
-时段配色、备份解析与合并、v1→v2→v3→v4 完整迁移链、reducer 各分支、
-站点身份生成与 URL 校验、热力图网格、书签导入的合并去重、樱花树的生成、
-待办的增改删与校验。
-共 13 个测试文件 / 225 个用例。
+时段配色、备份解析与合并、v1→v2→v3→v4→v5 完整迁移链、reducer 各分支、
+站点身份生成与 URL 校验、热力图网格与每日目标快照、站点筛选排序、
+书签导入的合并去重、樱花树的生成、待办的增改删与校验、
+**localStorage 持久化的保护分支**（mock 掉 localStorage，不需要 jsdom）。
+共 15 个测试文件 / 274 个用例。
 
 其中重点守着的几条：
 - `migrate.test.ts` —— v2→v3 的塌陷合并、新旧 id 交叉不互相污染、v1 链条、
@@ -348,10 +453,19 @@ npm test
   就会缺字段，而这条测试立刻变红
 - `backup.test.ts` 的待办段落 —— 「导出再导入，待办一条不少」，钉住
   `mergeData` 别忘了合并新字段（漏了是**静默丢失**，最隐蔽的一类 bug）
+- `improvements.test.ts` 的偏好段落 —— `sanitizePreferences` 必须拒绝**数组**
+  和带假 `toString` 的对象（MY-ISSUES #12，放进去会让整页白屏）
+- `storage.test.ts` 的 `protected persistence` —— 「能就地修好的数据不许触发
+  保护模式」+ 反面「真读不回来的必须报警」成对存在（MY-ISSUES #13）。
+  这两条和 sakura 那条一样，**都做过「注入旧实现确认会变红」的反验**
 
 **测不到的地方**（见「已知缺口」）：`parseBookmarks` 依赖 `DOMParser`，node 环境没有，
-只能人工验收；`storage.ts` 的浏览器分支同理。另外**迁移在真实 localStorage 上跑一遍**
-这件事没有自动化覆盖。
+只能人工验收。另外**迁移在真实 localStorage 上跑一遍**这件事没有自动化覆盖
+（`storage.test.ts` 用的是 mock，不是真浏览器存储）。
+
+写新测试时的一条硬要求：**断言必须能抓住它要防的那个 bug**。写完把实现改回旧的
+错法跑一次，测试不变红就说明它什么也没守住（MY-ISSUES #9 的学习 2、
+#13 的学习 2 都是这个教训）。
 
 ### 类型检查
 
@@ -368,42 +482,42 @@ npm run preview
 
 `build` 会先跑 `tsc --noEmit`，类型有错会直接中断构建。
 
-### 浏览器实拍（不装 Playwright）
+### 浏览器回归（一条命令，不装 Playwright）
 
-这台机器上**没有 playwright 包**，但浏览器内核早就缓存在
-`~/AppData/Local/ms-playwright/chromium-1217/`。所以不需要再装什么，
-直接用 Chrome DevTools Protocol 驱动它 —— Node 22 自带全局 `fetch` 和
-`WebSocket`，写一个几十行的脚本就能开工。
-
-流程：
+**现在有一条命令了** —— 不用再手搓临时脚本：
 
 ```bash
-# 1. 起静态服务（注意端口可能被占，vite 会自动 +1，看清它打印的是哪个）
-npm run preview
-
-# 2. 用带调试端口的无头 Chromium 打开页面
-CHROME=~/AppData/Local/ms-playwright/chromium-1217/chrome-win64/chrome.exe
-"$CHROME" --headless=new --disable-gpu --remote-debugging-port=9222 \
-  --user-data-dir="shots/chrome-profile" "http://localhost:4173/"
-
-# 3. 脚本连 http://localhost:9222/json/list 拿 webSocketDebuggerUrl，
-#    之后用 Runtime.evaluate 在页面里执行 JS（点击、读 DOM、读 localStorage）
+npm run build          # ⚠️ 必须先构建：preview 跑的是 dist/，不是源码
+npm run test:browser   # → 23 项场景 + 截图，落在 shots/regression/（已 gitignore）
 ```
+
+脚本 `scripts/browser-check.mjs` 自己会把该起的东西都起起来
+（`vite preview` + 无头浏览器 + CDP 连接），跑完自动清理临时 profile 和进程。
+浏览器按 `CHROME_PATH` → Chrome → Edge → Linux/macOS 常见路径**依次找第一个存在的**；
+这台机器上命中的是 Edge（同为 Chromium 内核）。
+
+它做的是「**真的点、真的读 localStorage**」：改受控输入框走原生 setter、
+多标签页并发勾选、导入备份走真实的 `<input type=file>`、
+甚至把 `navigator.locks` 藏掉来复现「没有 Web Locks 的浏览器」。
+所以它能抓住**单测够不着、肉眼也看不出来**的问题（22 项里的 8 项就是这一轮新加的）。
 
 三个必须知道的坑（都是实际踩过的）：
 
-1. **一律用 `localhost`，不要写 `127.0.0.1`。** 这台机器上 vite preview 和
-   Chromium 的调试端口都只绑在 IPv6 回环 `[::1]` 上，写死 IPv4 会**连接被拒**，
-   而 `curl` 只回一个 `000`，看不出任何原因。见 MY-ISSUES #11。
-2. **想改 React 受控输入框的值，必须走原生 setter + 派发 `input` 事件**：
+1. **`test:browser` 验的是 `dist/`，不是源码。** 改完代码不 `npm run build`
+   就跑，验的是上一版 —— 我做「注入 bug 确认会变红」的反验时，
+   第一轮就因为顺序反了而**假绿**。这个坑还有一个具体形态：
+   `npm test` 的 `build` 脚本是 `tsc --noEmit && vite build`，
+   若所有改动都只发生在**渲染层**，`tsc` 不会因为「产物过期」报错，脚本也不会提示。
+2. **一律用 `localhost` / `127.0.0.1` 要看清绑在哪。** 这台机器上 vite 的
+   dev/preview 默认只绑 `[::1]`，写死 IPv4 会**连接被拒**而 `curl` 只回 `000`。
+   脚本里显式传了 `--host 127.0.0.1` 就是为了躲开这条；自己手动起服务时别忘。见 MY-ISSUES #11。
+3. **想改 React 受控输入框的值，必须走原生 setter + 派发 `input` 事件**：
    ```js
    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
    setter.call(el, '文本')
    el.dispatchEvent(new Event('input', { bubbles: true }))
    ```
    直接 `el.value = '文本'` 不会触发 React 的 `onChange`，表现是「点了没反应」。
-3. **后台起的进程会随 bash 调用结束被回收。** 要么用工具的后台模式，
-   要么把「起服务 + 跑脚本 + 结束进程」放在同一次调用里。
 
-脚本本身是临时的，写在 `shots/`（已 gitignore）下，跑完可删。
-**这套东西没纳入 CI** —— 对当前体量不划算，见「已知缺口」里那条。
+**这套东西没纳入 CI** —— 它要起服务和浏览器，和「纯函数单测」是两个层次的成本，
+混进 `npm test` 会让它从 2 秒变成分钟级。见「已知缺口」里那条。

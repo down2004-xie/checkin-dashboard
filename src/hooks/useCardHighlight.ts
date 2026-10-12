@@ -22,6 +22,7 @@ import type { PointerEvent as ReactPointerEvent } from 'react'
  */
 export function useCardHighlight() {
   const handlePointerMove = useCallback((event: ReactPointerEvent<HTMLElement>) => {
+    if (document.documentElement.dataset.effects !== 'full' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return
     const target = event.currentTarget
     const rect = target.getBoundingClientRect()
 

@@ -10,6 +10,7 @@ import './styles/global.css'
 import './styles/app.css'
 import './styles/features.css'
 import './styles/sakura.css'
+import './styles/dashboard.css'
 
 import { App } from './App'
 

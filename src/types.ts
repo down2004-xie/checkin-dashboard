@@ -43,6 +43,8 @@ export interface Site {
 
   /** 分类。由书签导入的文件夹名或用户手填 */
   category?: string
+  paused?: boolean
+  pinned?: boolean
 }
 
 /**
@@ -69,7 +71,16 @@ export interface Todo {
 
   /** 是否已完成 */
   done: boolean
+  carriedFrom?: DateKey
 }
+
+export interface Preferences {
+  theme: 'auto' | 'dawn' | 'day' | 'dusk' | 'night'
+  effects: 'full' | 'light' | 'static'
+  compact: boolean
+}
+
+export const DEFAULT_PREFERENCES: Preferences = { theme: 'auto', effects: 'full', compact: false }
 
 /** localStorage 里存储的完整结构 */
 export interface CheckInData {
@@ -103,7 +114,9 @@ export interface CheckInData {
    * 混进进度环会让「100%」的含义变模糊（没写完待办算不算没完成今天？）。
    */
   todos: Record<DateKey, Todo[]>
+  targets: Record<DateKey, Site[]>
+  preferences: Preferences
 }
 
 /** 当前的数据格式版本，与 CheckInData.version 对应 */
-export const DATA_VERSION = 4
+export const DATA_VERSION = 5

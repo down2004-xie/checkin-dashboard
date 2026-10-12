@@ -1,38 +1,44 @@
-import type { CheckInData } from '../types'
-import { emptyData, migrate } from './migrate'
+import type { CheckInData, DateKey } from '../types'
+import { dataProblem, droppedEntries, emptyData, migrate } from './migrate'
+import { applyAction, snapshotDay, type CheckInAction } from './reducer'
 
-/**
- * localStorage 读写层。
- *
- * 铁律：组件里不许直接碰 localStorage，一律走这里。
- * 原因：localStorage 只能存字符串，读出来要 JSON.parse，
- * 而用户可能手动改过、可能是旧版本格式、可能是别的网站写坏的值。
- * 这些防御逻辑必须收在一处，否则会散落到每个组件里。
- */
+export const STORAGE_KEY = 'checkin-dashboard:data'
+export const RECOVERY_KEY = 'checkin-dashboard:recovery'
 
-const STORAGE_KEY = 'checkin-dashboard:data'
+export interface StorageSnapshot {
+  data: CheckInData
+  raw: string | null
+  issue: string | null
+}
 
-/** 读取全部签到数据。任何异常都返回空数据，不抛错。 */
-export function loadData(): CheckInData {
+export interface SaveResult {
+  ok: boolean
+  snapshot: StorageSnapshot
+  error?: string
+}
+
+export function readData(): StorageSnapshot {
+  let raw: string | null = null
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw === null) return emptyData()
-    return migrate(JSON.parse(raw))
+    raw = localStorage.getItem(STORAGE_KEY)
+    if (raw === null) return { data: emptyData(), raw, issue: null }
+    const parsed: unknown = JSON.parse(raw)
+    const problem = dataProblem(parsed)
+    if (problem) return { data: emptyData(), raw, issue: problem }
+    const dropped = droppedEntries(parsed)
+    return {
+      data: migrate(parsed), raw,
+      issue: dropped > 0 ? `检测到 ${dropped} 条无法读取的数据，已停止自动保存，请先下载原始数据` : null,
+    }
   } catch {
-    // JSON 坏了或 localStorage 被禁用（隐私模式），都当作没有数据
-    return emptyData()
+    return { data: emptyData(), raw, issue: raw === null ? '无法读取浏览器存储，请检查站点权限' : '存储内容不是有效 JSON，原始数据已保留' }
   }
 }
 
-/**
- * 写入全部签到数据。
- *
- * 返回是否成功。写失败时**不抛错**，因为调用方（React 渲染流程）
- * 无法有意义地处理它 —— 但要让调用方能知道、以便提示用户
- * 「数据没保存成功」。
- *
- * 常见失败原因：隐私模式、存储配额满、用户禁用了站点数据。
- */
+export function loadData(): CheckInData {
+  return readData().data
+}
+
 export function saveData(data: CheckInData): boolean {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(data))
@@ -42,7 +48,42 @@ export function saveData(data: CheckInData): boolean {
   }
 }
 
-/** 清空所有签到数据。用于「重置」功能，需二次确认后调用。 */
+async function withStorageLock(operation: () => SaveResult): Promise<SaveResult> {
+  if (typeof navigator !== 'undefined' && navigator.locks) {
+    return navigator.locks.request(STORAGE_KEY, operation)
+  }
+  return operation()
+}
+
+export async function commitAction(action: CheckInAction, day: DateKey, expectedRaw: string | null): Promise<SaveResult> {
+  return withStorageLock(() => {
+    const snapshot = readData()
+    if (snapshot.issue) return { ok: false, snapshot, error: snapshot.issue }
+    if ((typeof navigator === 'undefined' || !navigator.locks) && snapshot.raw !== expectedRaw) {
+      return { ok: false, snapshot, error: '其他页面更新了数据，已刷新当前页面，请重试本次操作' }
+    }
+    const next = snapshotDay(applyAction(snapshot.data, action), day)
+    const raw = JSON.stringify(next)
+    if (raw === snapshot.raw) return { ok: true, snapshot }
+    if (!saveData(next)) return { ok: false, snapshot, error: '保存失败，操作未生效。请检查存储空间或浏览器权限，并导出备份' }
+    return { ok: true, snapshot: { data: next, raw, issue: null } }
+  })
+}
+
+export async function recoverData(data: CheckInData, expectedRaw: string | null): Promise<SaveResult> {
+  return withStorageLock(() => {
+    const snapshot = readData()
+    if (snapshot.raw !== expectedRaw) return { ok: false, snapshot, error: '数据已被其他页面更改，请重新检查后再恢复' }
+    try {
+      if (snapshot.raw !== null) localStorage.setItem(RECOVERY_KEY, snapshot.raw)
+      if (!saveData(data)) throw new Error('save failed')
+      return { ok: true, snapshot: { data, raw: JSON.stringify(data), issue: null } }
+    } catch {
+      return { ok: false, snapshot, error: '无法安全保存恢复数据，原始数据未被主动清除。请下载备份后检查存储权限' }
+    }
+  })
+}
+
 export function clearData(): boolean {
   try {
     localStorage.removeItem(STORAGE_KEY)
@@ -52,6 +93,4 @@ export function clearData(): boolean {
   }
 }
 
-// emptyData 从 migrate.ts 迁来后继续从这里导出，外部引用不必改
 export { emptyData }
-export { STORAGE_KEY }

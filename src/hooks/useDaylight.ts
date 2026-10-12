@@ -1,6 +1,7 @@
 import { useEffect } from 'react'
 
-import { paletteForNow } from '../lib/daylight'
+import { paletteForNow, PALETTES } from '../lib/daylight'
+import type { Preferences } from '../types'
 
 /**
  * 时间驱动的配色 —— 沉浸光感的主力。
@@ -15,10 +16,10 @@ import { paletteForNow } from '../lib/daylight'
  * 由 tokens.css / global.css 里的规则消费。
  * 这样 JS 只负责「改几个变量」，具体怎么用是 CSS 的事。
  */
-export function useDaylight() {
+export function useDaylight(theme: Preferences['theme'] = 'auto') {
   useEffect(() => {
     const apply = () => {
-      const palette = paletteForNow()
+      const palette = theme === 'auto' ? paletteForNow() : PALETTES[theme]
       const root = document.documentElement
       root.style.setProperty('--bg-1', palette.bg1)
       root.style.setProperty('--bg-2', palette.bg2)
@@ -34,5 +35,5 @@ export function useDaylight() {
     // 而每次 apply 都会触发一次背景过渡动画，太频繁反而干扰。
     const id = window.setInterval(apply, 5 * 60_000)
     return () => window.clearInterval(id)
-  }, [])
+  }, [theme])
 }

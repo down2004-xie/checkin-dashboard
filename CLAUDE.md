@@ -31,7 +31,7 @@ src/
 ├─ hooks/       自定义 hooks，每个文件一个 hook
 ├─ lib/         纯函数，不 import React，必须可单测
 ├─ components/  React 组件，每个文件一个组件
-└─ styles/      tokens.css（设计变量）+ global/app/features/sakura.css
+└─ styles/      tokens.css（设计变量）+ global/app/features/sakura/dashboard.css
 
 fixtures/       开发期人工验收用的样本数据，不参与构建（不在 public/ 下）
 ```
@@ -42,15 +42,29 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 |---|---|
 | `date.ts` | 日期 key 换算（本地时区） |
 | `storage.ts` | localStorage 读写，唯一入口 |
-| `migrate.ts` | 版本迁移 + 数据校验，**storage 和 backup 共用** |
-| `reducer.ts` | 所有写操作的纯函数（新增/删除/勾选站点） |
+| `migrate.ts` | 版本迁移 + 数据校验，**storage 和 backup 共用**。`droppedEntries` 只数「真的读不回来」的条目，用来触发保护模式 |
+| `reducer.ts` | 所有写操作的纯函数（新增/删除/勾选站点、移动顺序、待办）。勾选只有 `checkedSet`（显式目标状态 + 拒绝暂停站点） |
 | `backup.ts` | 备份导出、解析、合并 |
 | `streak.ts` | 连续天数（全局 / 单站）、签到计数 |
 | `daylight.ts` | 时段配色色板 |
-| `heatmap.ts` | 热力图网格 + 强度分级 |
+| `heatmap.ts` | 热力图网格 + 强度分级 + `groupByWeek` / `monthLabel` |
+| `sites.ts` | 站点筛选/排序（搜索、分类、状态、置顶优先）+ `moveNeighbor`（**按可见列表**算换位邻居） |
+| `todo.ts` | 待办创建（`createTodo`，随机 UUID） |
+| `tween.ts` | 缓动函数（`easeOutCubic`） |
 | `site-form.ts` | URL 校验 + **站点身份 id 生成**（`siteIdFromUrl`） |
 | `bookmarks.ts` | 浏览器书签 HTML 解析 + 导入计划（去重、生成 id） |
 | `sakura.ts` | 樱花树递归生成（固定种子伪随机）+ 花瓣粒子参数 |
+
+**保护模式的判据只有一条**：`droppedEntries > 0`（真的读不回来），
+**去重不算**。这个数字唯一的用途就是决定要不要只读停写，而保护模式的代价
+（整个管理区被禁用、一律拒绝写入）很重，判据一宽用户就会被锁死在一份
+其实没坏的数据上。见 MY-ISSUES #13 —— 加严任何 `sanitize*` 之前都要先想这条。
+
+**「顺序」相关的操作要按用户看得见的列表算。** 页面可以带着筛选显示一部分站点，
+而 `sites` 在存储里是全集。移动站点时如果拿存储索引 ±1 当邻居，用户换掉的可能
+是屏幕外那张卡 —— 可见列表一动不动，存储顺序却被改了。所以
+`moveNeighbor`（`lib/sites.ts`）按**可见列表**算邻居，`reducer` 只执行交换。
+同理，置顶与普通站之间不许互换：置顶的显示位置由置顶决定，换了屏幕上也不会动。
 
 `sakura.ts` 的核心约束是**确定性**：同一种子必须生成同一棵树。
 组件会因为勾选签到而重渲染，用 `Math.random()` 的话树会在用户眼皮底下换形状。
@@ -80,17 +94,25 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 
 ## 数据约定
 
-localStorage 存一份带版本号的 JSON。**当前版本 3**：
+localStorage 存一份带版本号的 JSON。**当前版本 5**：
 
 ```ts
 {
-  version: 3,
+  version: 5,
   sites: [                                // 站点定义，顺序即页面展示顺序
-    { id: "bilibili-com", name: "哔哩哔哩", url: "https://...", category: "视频" }
+    { id: "bilibili-com", name: "哔哩哔哩", url: "https://...", category: "视频",
+      paused: false, pinned: false }
   ],
   records: {
     "2026-10-02": ["jd-com", "github-com"] // 日期 -> 当天已签到的站点 id
-  }
+  },
+  todos: {                                // 日期 -> 当天待办（v4 新增）
+    "2026-10-02": [{ id: "<uuid>", text: "买牛奶", done: false }]
+  },
+  targets: {                              // 日期 -> 当天的目标快照（v5 新增，见下）
+    "2026-10-02": [{ id: "jd-com", name: "京东", url: "https://..." }]
+  },
+  preferences: { theme: "auto", effects: "full", compact: false } // v5 新增
 }
 ```
 
@@ -102,6 +124,28 @@ localStorage 存一份带版本号的 JSON。**当前版本 3**：
 （`siteIdFromUrl`，`https://www.jd.com` → `jd-com`），同时重写全部 `records`。
 原因见下面「站点身份」一节。`data/sites.ts` 多出一张 `LEGACY_SEED_IDS` 对照表，
 只在 v1 迁移里用。
+
+**v4 相对 v3 的变化**：新增 `todos`（按天归属的每日待办）。纯加字段。
+
+**v5 相对 v4 的变化**：新增 `targets` 和 `preferences`。
+
+- `targets` 是**当天目标快照**：`snapshotDay` 在每天首次写入时把「当时还启用着的
+  站点」拷一份存下来。有了它，历史格子的完成率才不会被「今天加/删站点」改写 ——
+  以前热力图强度按「当前站点总数」算，加一个站会让所有历史格子一起变浅。
+- 历史记录没有快照（`targets[day] === undefined`）时，`summarizeDay` 返回
+  `total: null`，界面上显示「目标未知」而**不推测**完成率。迁移刻意不伪造
+  历史快照 —— 那是编数据。
+- `preferences` 是主题/特效/紧凑三项用户偏好。它属于**用户数据和设备**两个判断的夹缝：
+  目前按「数据」处理（进备份、合并时保留本机值），换设备想跟着走就带着它。
+
+### 偏好校验的一条硬规则
+
+`sanitizePreferences` 里的枚举校验**必须先 `typeof x === 'string'` 再 `includes`**，
+不能用 `includes(String(x))`。原因：`String(['auto']) === 'auto'`，
+数组会通过判断，而 `as` 断言只让编译器闭嘴、运行时不转换，
+于是 `theme` 变成 `['auto']`，下游 `PALETTES[theme]` 取到 `undefined`、
+`palette.bg1` 抛异常 → **整页白屏且用户无法在界面里修**（MY-ISSUES #12）。
+凡是用 `as` 的校验，都要问一句「判断用的值和返回的值是同一个吗」。
 
 ### 站点身份（这是全项目最要命的一条约定）
 
@@ -139,6 +183,13 @@ v2 只能退回 `site-N`，而 N 取决于「当时哪些号没人占」——�
    注意：孤儿记录虽然永远匹配不到站点，但 `calcStreak`（全局连续天数）
    只判断「那天有没有记录」，**会把它算进去**。验「历史有没有断」必须用
    `calcSiteStreak`（单站），用 `calcStreak` 会得到假通过。
+5. **`mergeData` 每加一个新字段都要同步合并**。合并只写 `records`/`sites` 时，
+   用户在新设备上导入备份，页面一切正常但待办（或目标快照）全部消失，
+   **且不报错**。`preferences` 刻意保留本机值；`targets` 按天取「本机的优先」。
+6. **判定「要不要进保护模式」只能用 `droppedEntries`**，不能用「清洗前后长度差」。
+   去重（`['a','a']`、同 id 站点）属于「内容还在」，把它算成丢弃会让用户一打开
+   页面就被锁成只读，而数据其实没坏。这条踩过，见 MY-ISSUES #13；
+   加严 `sanitize*` 之前先想一遍它会不会误触发保护模式。
 
 ## 部署
 

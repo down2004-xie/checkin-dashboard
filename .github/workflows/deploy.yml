@@ -40,6 +40,7 @@ jobs:
       # 用 ci 而不是 install：严格按 package-lock.json 安装，不修改 lock 文件，
       # 且当 lock 与 package.json 不一致时直接报错（install 会悄悄改成一致）。
       - run: npm ci
+      - run: npm test
 
       # package.json 里 build = "tsc --noEmit && vite build"，
       # 类型有错会在这里中断构建，坏代码上不了线

@@ -24,7 +24,7 @@ export function useTweenNumber(target: number, duration = 450): number {
     const from = displayRef.current
     if (from === target) return
 
-    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    if (document.documentElement.dataset.effects === 'static' || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
       displayRef.current = target
       setDisplay(target)
       return

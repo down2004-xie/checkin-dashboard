@@ -1,6 +1,6 @@
 import type { CheckInData, Todo } from '../types'
 import { DATA_VERSION } from '../types'
-import { migrate } from './migrate'
+import { dataProblem, droppedEntries, migrate } from './migrate'
 
 /**
  * 备份导出 / 导入。
@@ -47,7 +47,7 @@ export function backupFilename(now: Date = new Date()): string {
 }
 
 export type ParseResult =
-  | { ok: true; backup: Backup }
+  | { ok: true; backup: Backup; dropped: number }
   | { ok: false; reason: string }
 
 /**
@@ -95,6 +95,8 @@ export function parseBackup(text: string): ParseResult {
   }
 
   // 老版本备份（如 v1）在这里升级成当前版本的数据结构
+  const problem = dataProblem(data)
+  if (problem) return { ok: false, reason: problem }
   const migrated = migrate(data)
 
   // 显式列出字段而不是展开 candidate：
@@ -102,6 +104,9 @@ export function parseBackup(text: string): ParseResult {
   // 不满足 Backup 里 app 必填的约束。
   return {
     ok: true,
+    // 只数「真的丢掉了」的条目：重复项会被就地去掉，但内容还在，
+    // 不该让用户以为自己的数据没了（判据详见 migrate.ts 的 droppedEntries）
+    dropped: droppedEntries(data),
     backup: {
       app: 'checkin-dashboard',
       exportedAt: typeof candidate.exportedAt === 'string' ? candidate.exportedAt : '',
@@ -163,5 +168,7 @@ export function mergeData(a: CheckInData, b: CheckInData): CheckInData {
     }
   }
 
-  return { version: Math.max(a.version, b.version), sites, records, todos }
+  return { version: DATA_VERSION, sites, records, todos,
+    targets: { ...b.targets, ...a.targets }, preferences: { ...a.preferences },
+  }
 }

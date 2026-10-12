@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CheckInData, Todo } from '../types'
-import { DATA_VERSION } from '../types'
+import type { CheckInData, Site, Todo } from '../types'
+import { DATA_VERSION, DEFAULT_PREFERENCES } from '../types'
 import { applyAction } from './reducer'
 import { siteIdFromUrl } from './site-form'
 import { calcSiteStreak, calcStreak } from './streak'
@@ -13,46 +13,69 @@ function site(url: string, name: string) {
   return { id, name, url }
 }
 
-const SITE_A = { id: 'a', name: 'A', url: 'https://a' }
-const SITE_B = { id: 'b', name: 'B', url: 'https://b' }
+const SITE_A: Site = { id: 'a', name: 'A', url: 'https://a' }
+const SITE_B: Site = { id: 'b', name: 'B', url: 'https://b' }
 
 function makeData(
   records: Record<string, string[]>,
   sites = [SITE_A, SITE_B],
 ): CheckInData {
-  return { version: DATA_VERSION, records, sites, todos: {} }
+  return { version: DATA_VERSION, records, sites, todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
 }
 
 /** 造只带待办的测试数据 —— 待办测试不关心站点和签到记录 */
 function makeTodoData(todos: Record<string, Todo[]>): CheckInData {
-  return { version: DATA_VERSION, records: {}, sites: [], todos }
+  return { version: DATA_VERSION, records: {}, sites: [], todos, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
 }
 
 const TODO_A: Todo = { id: 't1', text: '写作业', done: false }
 const TODO_B: Todo = { id: 't2', text: '买牛奶', done: false }
 
-describe('toggled', () => {
+/**
+ * 检查签到状态用 `checkedSet`（显式声明目标状态），**不用** `toggled`。
+ *
+ * 原来的 `toggled`（无条件翻转）在 v5 已经删掉了：它唯一的生产调用方
+ * 早就换成了 `checkedSet`，而 `toggled` 没有「暂停站点不许签到」这条守卫。
+ * 留着一个只有测试在用的 action，下一个人会以为它还能用，照着它写新功能。
+ *
+ * `checkedSet` 的两条语义值得单独守住：
+ * 1. **幂等**——重复勾同一个站不会把它取消（`toggled` 会）
+ * 2. **暂停的站点不许勾**——它不在当天的目标里，勾了会让进度环对不上
+ */
+describe('checkedSet', () => {
   it('添加签到', () => {
-    const before = makeData({})
-    const after = applyAction(before, { type: 'toggled', day: '2026-10-02', siteId: 'a' })
+    const after = applyAction(makeData({}), { type: 'checkedSet', day: '2026-10-02', siteId: 'a', checked: true })
     expect(after.records['2026-10-02']).toEqual(['a'])
   })
 
-  it('再次签到同一站 → 取消', () => {
-    const before = makeData({ '2026-10-02': ['a'] })
-    const after = applyAction(before, { type: 'toggled', day: '2026-10-02', siteId: 'a' })
+  it('取消签到', () => {
+    const after = applyAction(makeData({ '2026-10-02': ['a'] }), { type: 'checkedSet', day: '2026-10-02', siteId: 'a', checked: false })
     expect(after.records['2026-10-02']).toBeUndefined()
   })
 
   it('当天签多个站按顺序追加', () => {
-    const before = makeData({ '2026-10-02': ['a'] })
-    const after = applyAction(before, { type: 'toggled', day: '2026-10-02', siteId: 'b' })
+    const after = applyAction(makeData({ '2026-10-02': ['a'] }), { type: 'checkedSet', day: '2026-10-02', siteId: 'b', checked: true })
     expect(after.records['2026-10-02']).toEqual(['a', 'b'])
+  })
+
+  it('幂等：已勾选的再设成 true 不取消，原样返回同一个引用', () => {
+    const before = makeData({ '2026-10-02': ['a'] })
+    expect(applyAction(before, { type: 'checkedSet', day: '2026-10-02', siteId: 'a', checked: true })).toBe(before)
+  })
+
+  it('暂停的站点勾不动', () => {
+    const before = makeData({}, [{ ...SITE_A, paused: true }, SITE_B])
+    expect(applyAction(before, { type: 'checkedSet', day: '2026-10-02', siteId: 'a', checked: true })).toBe(before)
+  })
+
+  it('不存在的站点勾不动（孤儿记录不该被无中生有）', () => {
+    const before = makeData({})
+    expect(applyAction(before, { type: 'checkedSet', day: '2026-10-02', siteId: 'ghost', checked: true })).toBe(before)
   })
 
   it('不可变：原 data 不被修改', () => {
     const before = makeData({ '2026-10-02': ['a'] })
-    applyAction(before, { type: 'toggled', day: '2026-10-02', siteId: 'b' })
+    applyAction(before, { type: 'checkedSet', day: '2026-10-02', siteId: 'b', checked: true })
     expect(before.records['2026-10-02']).toEqual(['a']) // 仍是原来的值
   })
 })
@@ -369,6 +392,7 @@ describe('todoRemoved', () => {
       records: { '2026-10-07': ['a'] },
       sites: [SITE_A],
       todos: { '2026-10-07': [TODO_A] },
+      targets: {}, preferences: { ...DEFAULT_PREFERENCES },
     }
     const after = applyAction(before, { type: 'todoRemoved', day: '2026-10-07', id: 't1' })
     expect(after.records).toEqual({ '2026-10-07': ['a'] })
