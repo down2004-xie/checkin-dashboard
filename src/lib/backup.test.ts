@@ -34,10 +34,12 @@ describe('backupFilename', () => {
   })
 
   it('用本地日期而不是 UTC', () => {
-    // 本地 10 月 2 日凌晨，UTC 还是 10 月 1 日
-    expect(backupFilename(new Date(2026, 9, 2, 1, 0))).toBe(
-      'checkin-backup-2026-10-02.json',
-    )
+    // 本地时间的 10-02 01:00，无论机器在哪个时区都该得到 10-02。
+    // 这里同样不能写 `new Date(2026, 9, 2, 1, 0)` 就了事 ——
+    // 那用的是运行机器的本地时区，CI（UTC）和本地（UTC+8）算的不是同一瞬间。
+    const utc = Date.UTC(2026, 9, 2, 1, 0)
+    const local = new Date(utc + new Date(utc).getTimezoneOffset() * 60_000)
+    expect(backupFilename(local)).toBe('checkin-backup-2026-10-02.json')
   })
 })
 
