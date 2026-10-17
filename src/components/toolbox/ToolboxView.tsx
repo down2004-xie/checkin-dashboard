@@ -7,6 +7,7 @@ import { CountdownTool } from './CountdownTool'
 import { RandomPick } from './RandomPick'
 import { ImageSlice } from './ImageSlice'
 import { ImageCompress } from './ImageCompress'
+import { TextStatsTool } from './TextStatsTool'
 
 interface ToolboxViewProps {
   today: DateKey
@@ -57,6 +58,7 @@ export function ToolboxView({ today }: ToolboxViewProps) {
         {activeId === 'random-pick' && <RandomPick />}
         {activeId === 'image-grid' && <ImageSlice />}
         {activeId === 'image-compress' && <ImageCompress />}
+        {activeId === 'text-stats' && <TextStatsTool />}
       </section>
     )
   }

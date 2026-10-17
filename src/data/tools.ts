@@ -148,7 +148,7 @@ export const TOOLS: ToolDef[] = [
     name: '文本字数统计',
     description: '统计字数、字符数、段落数与阅读时长',
     category: 'document',
-    status: 'soon',
+    status: 'ready',
     icon: '🔢',
   },
   {
