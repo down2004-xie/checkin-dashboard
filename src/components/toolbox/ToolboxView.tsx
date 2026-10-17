@@ -6,6 +6,7 @@ import { UnitConverter } from './UnitConverter'
 import { CountdownTool } from './CountdownTool'
 import { RandomPick } from './RandomPick'
 import { ImageSlice } from './ImageSlice'
+import { ImageCompress } from './ImageCompress'
 
 interface ToolboxViewProps {
   today: DateKey
@@ -55,6 +56,7 @@ export function ToolboxView({ today }: ToolboxViewProps) {
         {activeId === 'countdown' && <CountdownTool today={today} />}
         {activeId === 'random-pick' && <RandomPick />}
         {activeId === 'image-grid' && <ImageSlice />}
+        {activeId === 'image-compress' && <ImageCompress />}
       </section>
     )
   }

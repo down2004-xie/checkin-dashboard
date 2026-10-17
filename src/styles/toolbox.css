@@ -403,6 +403,71 @@
   text-underline-offset: 2px;
 }
 
+/* ---------- 图片压缩 ---------- */
+
+.compress-compare {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin: 8px 0 14px;
+}
+
+.compress-item {
+  margin: 0;
+  flex: 1;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.compress-item img {
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.22);
+}
+
+.compress-item figcaption {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.compress-item figcaption strong {
+  color: var(--accent);
+}
+
+.compress-summary {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 12px 16px;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.22);
+  border: 1px solid var(--glass-border);
+}
+
+.compress-summary__ok {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--done);
+}
+
+.compress-summary__warn {
+  font-size: 14px;
+  color: #fdba74;
+}
+
+/* range 滑块在深色玻璃上的可见性 */
+.tool-panel input[type='range'] {
+  accent-color: var(--accent);
+  width: 100%;
+}
+
 /* ---------- 移动端与降级 ---------- */
 
 @media (max-width: 640px) {

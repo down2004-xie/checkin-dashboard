@@ -84,7 +84,7 @@ export const TOOLS: ToolDef[] = [
     name: '图片压缩',
     description: '按长边和质量压缩，体积能小一大截',
     category: 'image',
-    status: 'soon',
+    status: 'ready',
     icon: '🗜️',
   },
   {
