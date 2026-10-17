@@ -8,6 +8,7 @@ import { RandomPick } from './RandomPick'
 import { ImageSlice } from './ImageSlice'
 import { ImageCompress } from './ImageCompress'
 import { TextStatsTool } from './TextStatsTool'
+import { ImageWatermark } from './ImageWatermark'
 
 interface ToolboxViewProps {
   today: DateKey
@@ -59,6 +60,7 @@ export function ToolboxView({ today }: ToolboxViewProps) {
         {activeId === 'image-grid' && <ImageSlice />}
         {activeId === 'image-compress' && <ImageCompress />}
         {activeId === 'text-stats' && <TextStatsTool />}
+        {activeId === 'image-watermark' && <ImageWatermark />}
       </section>
     )
   }

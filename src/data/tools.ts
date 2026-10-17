@@ -98,9 +98,9 @@ export const TOOLS: ToolDef[] = [
   {
     id: 'image-watermark',
     name: '加水印',
-    description: '文字或图片水印，可调位置、大小、透明度、平铺',
+    description: '文字水印，可调位置、大小、透明度、旋转、平铺',
     category: 'image',
-    status: 'soon',
+    status: 'ready',
     icon: '💧',
   },
   {
