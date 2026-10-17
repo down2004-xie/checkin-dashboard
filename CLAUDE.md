@@ -26,12 +26,12 @@
 
 ```
 src/
-├─ data/        静态配置数据（站点清单），手写，不来自网络
+├─ data/        静态配置数据（站点清单 + 工具箱目录），手写，不来自网络
 ├─ types.ts     全局类型定义（数据契约，改动牵连全局）
 ├─ hooks/       自定义 hooks，每个文件一个 hook
 ├─ lib/         纯函数，不 import React，必须可单测
-├─ components/  React 组件，每个文件一个组件
-└─ styles/      tokens.css（设计变量）+ global/app/features/sakura/dashboard.css
+├─ components/  React 组件，每个文件一个组件；toolbox/ 是工具箱视图及其工具
+└─ styles/      tokens.css（设计变量）+ global/app/features/sakura/dashboard/toolbox.css
 
 fixtures/       开发期人工验收用的样本数据，不参与构建（不在 public/ 下）
 ```
@@ -54,6 +54,10 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `site-form.ts` | URL 校验 + **站点身份 id 生成**（`siteIdFromUrl`） |
 | `bookmarks.ts` | 浏览器书签 HTML 解析 + 导入计划（去重、生成 id） |
 | `sakura.ts` | 樱花树递归生成（固定种子伪随机）+ 花瓣粒子参数 |
+| `unit-convert.ts` | 单位换算（长度/重量/面积/温度）。各量纲定基准单位、值先转基准再转出；温度单独走偏移公式 |
+| `countdown.ts` | 倒计时 / 纪念日的自然日差。用 UTC 天序号相减，规避夏令时导致的偏一天 |
+| `random-pick.ts` | 掷骰子 / 抛硬币 / 抽签 / 洗牌分组 / 名单解析。随机源 `random()` 可注入，便于单测确定性 |
+| `image-slice.ts` | 切图矩形计算（边界取整保证不丢像素不重叠）+ 切片文件名。不碰 Canvas |
 
 **保护模式的判据只有一条**：`droppedEntries > 0`（真的读不回来），
 **去重不算**。这个数字唯一的用途就是决定要不要只读停写，而保护模式的代价
@@ -79,6 +83,14 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 样本文件见 `fixtures/sample-bookmarks.html`（照 Chrome 导出格式手写，
 埋了根文件夹、嵌套文件夹、`javascript:` 小工具、`chrome://` 内部页、重复地址）。
 这也是为什么解析层被拆成两个函数：把不可测的部分圈到最小。
+
+**工具箱是「第二个视图」，不是第二个项目。** 顶层用 `view` state 在「签到 / 工具箱」
+之间条件渲染（项目刻意无路由）。工具目录是 `data/tools.ts` 里的静态数组，
+**不进 localStorage、不升数据版本**——工具是编译期确定的目录，不是用户数据。
+加一个工具只需：`data/tools.ts` 加一行 + 写组件 + 在 `ToolboxView` 里挂上。
+`status` 三态：`ready`（可用，进面板）/ `soon`（开发中，点了给提示）/ `link`（外链）。
+新工具若含纯逻辑，逻辑一律进 `lib/`（如 `unit-convert.ts` / `countdown.ts`）并单测；
+组件只做渲染。**临时分享箱这类要后端的工具只能 `soon`**，纯静态站实现不了。
 
 **分层铁律**：`lib/` 里的代码不允许 import React。一旦某个逻辑能在 lib 里写，
 就不要放进 hooks 或 components——因为纯函数好测试、好理解、面试好讲。

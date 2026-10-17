@@ -23,6 +23,7 @@ import { TodoPanel } from './components/TodoPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SakuraTree } from './components/SakuraTree'
 import { PetalLayer } from './components/PetalLayer'
+import { ToolboxView } from './components/toolbox/ToolboxView'
 
 interface ImportPreview {
   backup: Backup
@@ -45,6 +46,7 @@ export function App() {
   const { preferences, sites } = data
   useDaylight(preferences.theme)
   usePointerLight(preferences.effects === 'full')
+  const [view, setView] = useState<'dashboard' | 'tools'>('dashboard')
   const [notice, setNotice] = useState<string | null>(null)
   const [filters, setFilters] = useState<SiteFilters>({ query: '', category: null, status: 'all', sort: 'manual' })
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -152,6 +154,12 @@ export function App() {
     <main className="app">
       <SakuraTree fullBloom={total > 0 && done === total} />
       {preferences.effects === 'full' && <PetalLayer burstId={burstId} />}
+      <nav className="view-switch" aria-label="切换视图">
+        <button type="button" className="view-switch__btn" aria-pressed={view === 'dashboard'} onClick={() => setView('dashboard')}>签到</button>
+        <button type="button" className="view-switch__btn" aria-pressed={view === 'tools'} onClick={() => setView('tools')}>工具箱</button>
+      </nav>
+      {view === 'tools' && <ToolboxView today={today} />}
+      {view === 'dashboard' && <>
       <ProgressHeader done={done} total={total} streak={statistics.streak} longest={statistics.longest} />
       <p className="dashboard-date">{today} · 今日目标 {total} 个{sites.length > total ? ` · 已暂停 ${sites.length - total} 个` : ''}</p>
 
@@ -215,6 +223,7 @@ export function App() {
         onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file, 'backup'); event.target.value = '' }} />
       <input ref={bookmarkInputRef} type="file" accept="text/html,.html,.htm" className="visually-hidden" disabled={!!issue || readingFile || busy}
         onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file, 'bookmarks'); event.target.value = '' }} />
+      </>}
     </main>
   )
 }
