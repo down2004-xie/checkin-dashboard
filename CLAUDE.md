@@ -60,6 +60,7 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `image-slice.ts` | 切图矩形计算（边界取整保证不丢像素不重叠）+ 切片文件名。不碰 Canvas |
 | `image-compress.ts` | 等比缩放尺寸（不放大）+ 字节格式化 + 压缩率。不碰 Canvas |
 | `image-convert.ts` | 格式表（PNG/JPEG/WebP 的能力标记）+ 扩展名替换。不碰 Canvas |
+| `image-transform.ts` | 裁剪/旋转/翻转几何：角度归一、旋转后尺寸、矩形 clamp、百分比↔像素、拖拽点→矩形。不碰 Canvas |
 | `text-stats.ts` | 文本统计（字符/汉字/英文词/数字串/行/段/阅读时长）。中英混排逐字符状态机分词 |
 | `watermark.ts` | 水印坐标计算：九宫格锚点 + 平铺点位 + 颜色转 rgba + 对比阴影色。只算几何/颜色，不碰 Canvas |
 

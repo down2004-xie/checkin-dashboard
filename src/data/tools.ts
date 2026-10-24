@@ -90,9 +90,9 @@ export const TOOLS: ToolDef[] = [
   {
     id: 'image-crop',
     name: '裁剪旋转翻转',
-    description: '自由裁剪、任意角度旋转、水平垂直翻转',
+    description: '拖拽框选裁剪、90° 旋转、水平垂直翻转',
     category: 'image',
-    status: 'soon',
+    status: 'ready',
     icon: '✂️',
   },
   {

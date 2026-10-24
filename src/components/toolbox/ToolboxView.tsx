@@ -10,6 +10,7 @@ import { ImageCompress } from './ImageCompress'
 import { TextStatsTool } from './TextStatsTool'
 import { ImageWatermark } from './ImageWatermark'
 import { ImageConvert } from './ImageConvert'
+import { ImageCrop } from './ImageCrop'
 
 interface ToolboxViewProps {
   today: DateKey
@@ -63,6 +64,7 @@ export function ToolboxView({ today }: ToolboxViewProps) {
         {activeId === 'text-stats' && <TextStatsTool />}
         {activeId === 'image-watermark' && <ImageWatermark />}
         {activeId === 'image-convert' && <ImageConvert />}
+        {activeId === 'image-crop' && <ImageCrop />}
       </section>
     )
   }
