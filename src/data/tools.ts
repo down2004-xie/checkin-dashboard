@@ -74,9 +74,9 @@ export const TOOLS: ToolDef[] = [
   {
     id: 'image-convert',
     name: '图片格式互转',
-    description: 'PNG / JPG / WebP / ICO 互转，ICO 可打包多尺寸',
+    description: 'PNG / JPG / WebP 互转，PNG 无损可保留透明',
     category: 'image',
-    status: 'soon',
+    status: 'ready',
     icon: '🔄',
   },
   {
