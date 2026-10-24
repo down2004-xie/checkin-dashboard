@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { anchorPosition, tilePositions } from './watermark'
+import { anchorPosition, hexToRgba, shadowColorFor, tilePositions } from './watermark'
 
 describe('anchorPosition', () => {
   // 画布 1000×800，水印 100×50，padding 10
@@ -77,5 +77,54 @@ describe('tilePositions', () => {
     expect(tilePositions(0, 100, 100, 50)).toEqual([])
     expect(tilePositions(100, 100, 0, 50)).toEqual([])
     expect(tilePositions(100, 100, 100, 50, -100, 0)).toEqual([])
+  })
+})
+
+describe('hexToRgba', () => {
+  it('6 位十六进制转 rgba', () => {
+    expect(hexToRgba('#ff0000', 1)).toBe('rgba(255, 0, 0, 1)')
+    expect(hexToRgba('#00ff00', 0.5)).toBe('rgba(0, 255, 0, 0.5)')
+    expect(hexToRgba('#0000ff', 0)).toBe('rgba(0, 0, 255, 0)')
+  })
+
+  it('3 位简写展开', () => {
+    expect(hexToRgba('#fff', 1)).toBe('rgba(255, 255, 255, 1)')
+    expect(hexToRgba('#f00', 0.5)).toBe('rgba(255, 0, 0, 0.5)')
+  })
+
+  it('带不带 # 都能解析', () => {
+    expect(hexToRgba('ff8800', 1)).toBe('rgba(255, 136, 0, 1)')
+  })
+
+  it('透明度钳到 0~1', () => {
+    expect(hexToRgba('#fff', 2)).toBe('rgba(255, 255, 255, 1)')
+    expect(hexToRgba('#fff', -1)).toBe('rgba(255, 255, 255, 0)')
+  })
+
+  it('非法颜色退回白色（不抛异常）', () => {
+    expect(hexToRgba('not-a-color', 1)).toBe('rgba(255, 255, 255, 1)')
+    expect(hexToRgba('#12345', 0.3)).toBe('rgba(255, 255, 255, 0.3)')
+  })
+})
+
+describe('shadowColorFor', () => {
+  it('亮色（白）配黑影', () => {
+    expect(shadowColorFor('#ffffff')).toBe('rgba(0, 0, 0, 0.5)')
+  })
+
+  it('暗色（黑）配白影', () => {
+    expect(shadowColorFor('#000000')).toBe('rgba(255, 255, 255, 0.5)')
+  })
+
+  it('中等亮度的黄配黑影（亮度 > 128）', () => {
+    expect(shadowColorFor('#ffff00')).toBe('rgba(0, 0, 0, 0.5)') // 亮度 226
+  })
+
+  it('深蓝配白影（亮度 < 128）', () => {
+    expect(shadowColorFor('#000080')).toBe('rgba(255, 255, 255, 0.5)')
+  })
+
+  it('非法颜色按亮字处理（配黑影）', () => {
+    expect(shadowColorFor('nope')).toBe('rgba(0, 0, 0, 0.5)')
   })
 })

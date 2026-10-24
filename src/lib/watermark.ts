@@ -10,6 +10,48 @@ export type Anchor =
   | 'middle-left' | 'center' | 'middle-right'
   | 'bottom-left' | 'bottom-center' | 'bottom-right'
 
+/** 把 #rgb / #rrggbb / rrggbb 解析成 {r,g,b}；非法返回 null */
+function parseHexColor(hex: string): { r: number; g: number; b: number } | null {
+  let value = hex.trim().replace(/^#/, '')
+  if (value.length === 3) value = value.split('').map((c) => c + c).join('')
+  if (!/^[0-9a-fA-F]{6}$/.test(value)) return null
+  return {
+    r: parseInt(value.slice(0, 2), 16),
+    g: parseInt(value.slice(2, 4), 16),
+    b: parseInt(value.slice(4, 6), 16),
+  }
+}
+
+/**
+ * 把 #rgb / #rrggbb 的十六进制颜色转成 rgba() 字符串，供 canvas 的 fillStyle 用。
+ *
+ * 为什么单独抽出来：canvas 的 fillStyle 吃 #rrggbb 也吃 rgba()，但透明度要单独叠加。
+ * 用 rgba 能一步把「颜色 + 透明度」定下来，不用改 ctx.globalAlpha（那个会影响阴影等其它绘制）。
+ * 支持 3 位简写（#fff）；解析失败退回白色，绝不抛异常 —— 颜色来自 <input type=color>，
+ * 正常不会非法，但兜底能防住手改 DOM 之类的边界。
+ */
+export function hexToRgba(hex: string, alpha: number): string {
+  const a = Math.min(1, Math.max(0, Number.isFinite(alpha) ? alpha : 1))
+  const rgb = parseHexColor(hex)
+  if (!rgb) return `rgba(255, 255, 255, ${a})`
+  return `rgba(${rgb.r}, ${rgb.g}, ${rgb.b}, ${a})`
+}
+
+/**
+ * 给水印文字配一个「对比阴影」颜色：亮字配黑影、暗字配白影，
+ * 保证文字在任何底色的照片上都看得清。
+ *
+ * 用感知亮度公式（Rec.601：0.299R+0.587G+0.114B），阈值 128。
+ * 解析失败按亮字处理（配黑影），和 hexToRgba 的兜底白字一致。
+ */
+export function shadowColorFor(hex: string): string {
+  const rgb = parseHexColor(hex)
+  if (!rgb) return 'rgba(0, 0, 0, 0.5)'
+  const luminance = 0.299 * rgb.r + 0.587 * rgb.g + 0.114 * rgb.b
+  return luminance > 128 ? 'rgba(0, 0, 0, 0.5)' : 'rgba(255, 255, 255, 0.5)'
+}
+
+
 export interface Point {
   x: number
   y: number

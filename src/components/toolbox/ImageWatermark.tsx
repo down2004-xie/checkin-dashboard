@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 
-import { anchorPosition, tilePositions, type Anchor } from '../../lib/watermark'
+import { anchorPosition, hexToRgba, shadowColorFor, tilePositions, type Anchor } from '../../lib/watermark'
 
 const ANCHORS: { id: Anchor; label: string }[] = [
   { id: 'top-left', label: '左上' }, { id: 'top-center', label: '上中' }, { id: 'top-right', label: '右上' },
@@ -26,6 +26,7 @@ export function ImageWatermark() {
   const [fontSize, setFontSize] = useState('32')
   const [opacity, setOpacity] = useState('0.4')
   const [rotation, setRotation] = useState('0')
+  const [color, setColor] = useState('#ffffff')
   const [previewUrl, setPreviewUrl] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const objectUrlRef = useRef<string | null>(null)
@@ -44,10 +45,10 @@ export function ImageWatermark() {
 
     const size = Math.max(8, Number(fontSize) || 32)
     ctx.font = `600 ${size}px -apple-system, "Microsoft YaHei", sans-serif`
-    ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, Math.max(0, Number(opacity) || 0))})`
+    ctx.fillStyle = hexToRgba(color, Number(opacity) || 0)
     ctx.textBaseline = 'top'
-    // 文字加一层淡阴影，压在白底或深底上都看得清
-    ctx.shadowColor = 'rgba(0, 0, 0, 0.5)'
+    // 阴影颜色随文字颜色自适应：亮字配黑影、暗字配白影，任何底色都看得清
+    ctx.shadowColor = shadowColorFor(color)
     ctx.shadowBlur = 2
 
     const wmW = ctx.measureText(text).width
@@ -76,7 +77,7 @@ export function ImageWatermark() {
       ctx.restore()
     }
     setPreviewUrl(canvas.toDataURL('image/png'))
-  }, [image, text, anchor, tile, fontSize, opacity, rotation])
+  }, [image, text, anchor, tile, fontSize, opacity, rotation, color])
 
   const handleFile = (file: File) => {
     setError(null)
@@ -108,6 +109,8 @@ export function ImageWatermark() {
       <div className="unit-row">
         <label className="unit-field"><span className="unit-field__label">字号 {fontSize}px</span>
           <input type="range" min="12" max="96" step="2" aria-label="字号" value={fontSize} onChange={(event) => setFontSize(event.target.value)} /></label>
+        <label className="unit-field"><span className="unit-field__label">颜色</span>
+          <input type="color" aria-label="水印颜色" value={color} onChange={(event) => setColor(event.target.value)} /></label>
         <label className="unit-field"><span className="unit-field__label">透明度 {Math.round(Number(opacity) * 100)}%</span>
           <input type="range" min="0.1" max="1" step="0.05" aria-label="透明度" value={opacity} onChange={(event) => setOpacity(event.target.value)} /></label>
         <label className="unit-field"><span className="unit-field__label">旋转 {rotation}°</span>
@@ -136,7 +139,7 @@ export function ImageWatermark() {
         </div>
       )}
 
-      <p className="hint">支持文字水印，可调字号、透明度、旋转、九宫格位置或平铺。图片只在本机处理，不会上传。</p>
+      <p className="hint">支持文字水印，可调字号、颜色、透明度、旋转、九宫格位置或平铺。文字阴影随颜色自适应，深浅底色都看得清。图片只在本机处理，不会上传。</p>
     </div>
   )
 }
