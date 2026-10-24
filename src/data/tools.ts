@@ -124,7 +124,7 @@ export const TOOLS: ToolDef[] = [
     name: '打码与马赛克',
     description: '框选区域打马赛克或模糊，证件、聊天记录都能用',
     category: 'image',
-    status: 'soon',
+    status: 'ready',
     icon: '🩹',
   },
   {

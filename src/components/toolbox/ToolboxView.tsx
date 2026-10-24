@@ -11,6 +11,7 @@ import { TextStatsTool } from './TextStatsTool'
 import { ImageWatermark } from './ImageWatermark'
 import { ImageConvert } from './ImageConvert'
 import { ImageCrop } from './ImageCrop'
+import { ImageMosaic } from './ImageMosaic'
 
 interface ToolboxViewProps {
   today: DateKey
@@ -65,6 +66,7 @@ export function ToolboxView({ today }: ToolboxViewProps) {
         {activeId === 'image-watermark' && <ImageWatermark />}
         {activeId === 'image-convert' && <ImageConvert />}
         {activeId === 'image-crop' && <ImageCrop />}
+        {activeId === 'image-mosaic' && <ImageMosaic />}
       </section>
     )
   }
