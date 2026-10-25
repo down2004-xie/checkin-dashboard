@@ -13,6 +13,9 @@ import { ImageConvert } from './ImageConvert'
 import { ImageCrop } from './ImageCrop'
 import { ImageMosaic } from './ImageMosaic'
 import { ImageIdPhoto } from './ImageIdPhoto'
+import { ImageStitch } from './ImageStitch'
+import { ImagesToPdf } from './ImagesToPdf'
+import { BarcodeTool } from './BarcodeTool'
 
 interface ToolboxViewProps {
   today: DateKey
@@ -69,6 +72,9 @@ export function ToolboxView({ today }: ToolboxViewProps) {
         {activeId === 'image-crop' && <ImageCrop />}
         {activeId === 'image-mosaic' && <ImageMosaic />}
         {activeId === 'id-photo' && <ImageIdPhoto />}
+        {activeId === 'image-stitch' && <ImageStitch />}
+        {activeId === 'pdf-convert' && <ImagesToPdf />}
+        {activeId === 'qr-code' && <BarcodeTool />}
       </section>
     )
   }

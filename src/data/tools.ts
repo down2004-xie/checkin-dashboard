@@ -65,10 +65,10 @@ export const TOOLS: ToolDef[] = [
   },
   {
     id: 'qr-code',
-    name: '二维码与条形码',
-    description: '把网址、文字、WiFi 密码生成二维码或条形码图片',
+    name: '条形码生成',
+    description: '把数字、字母生成 Code 128 条形码图片',
     category: 'daily',
-    status: 'soon',
+    status: 'ready',
     icon: '🔗',
   },
   {
@@ -116,7 +116,7 @@ export const TOOLS: ToolDef[] = [
     name: '长图拼接',
     description: '多张截图纵向或横向拼成一张长图',
     category: 'image',
-    status: 'soon',
+    status: 'ready',
     icon: '🧩',
   },
   {
@@ -137,10 +137,10 @@ export const TOOLS: ToolDef[] = [
   },
   {
     id: 'pdf-convert',
-    name: 'PDF 转换',
-    description: 'PDF 与图片互转、多图合并成 PDF（全部在本地处理）',
+    name: '图片转 PDF',
+    description: '多张图片合并成一个 PDF，全部在本地处理',
     category: 'document',
-    status: 'soon',
+    status: 'ready',
     icon: '📄',
   },
   {

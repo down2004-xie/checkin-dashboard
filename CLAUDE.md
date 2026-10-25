@@ -63,6 +63,9 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `image-transform.ts` | 裁剪/旋转/翻转几何：角度归一、旋转后尺寸、矩形 clamp、百分比↔像素、拖拽点→矩形。不碰 Canvas |
 | `image-mosaic.ts` | 马赛克块尺寸（按长边比例）+ 网格切分 + 贴边格尺寸。不碰 Canvas |
 | `id-photo.ts` | 证件照：尺寸表 + 颜色距离 + 背景判定/替换 + 估背景色（中位数）+ 居中裁剪。不碰 Canvas |
+| `image-stitch.ts` | 长图拼接：统一一边（纵向统一宽/横向统一高）+ 各图等比缩放的位置尺寸布局。不碰 Canvas |
+| `images-to-pdf.ts` | 手写最小 PDF 1.4（多图各一页，DCTDecode 直嵌 JPEG），xref 偏移用真实字节数算。不碰 Canvas |
+| `barcode.ts` | Code 128（Code Set B）编码：107 项标准模式表 + 校验和 + 模块序列。纯算法 |
 | `text-stats.ts` | 文本统计（字符/汉字/英文词/数字串/行/段/阅读时长）。中英混排逐字符状态机分词 |
 | `watermark.ts` | 水印坐标计算：九宫格锚点 + 平铺点位 + 颜色转 rgba + 对比阴影色。只算几何/颜色，不碰 Canvas |
 

@@ -600,6 +600,39 @@
   background: rgba(0, 0, 0, 0.22);
 }
 
+/* ---------- 条形码生成 ---------- */
+
+.barcode-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 16px;
+  overflow-x: auto; /* 长内容条码较宽，窄屏可横向滚动 */
+}
+
+.barcode-preview canvas {
+  max-width: 100%;
+  height: auto;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.barcode-preview__text {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  color: var(--text-secondary);
+  word-break: break-all;
+  text-align: center;
+}
+
+/* 图片转 PDF：预览列表里 figcaption 内的「移除」按钮收紧一点，别挤爆小字行 */
+.compress-item figcaption .btn {
+  margin-left: 8px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
 /* ---------- 移动端与降级 ---------- */
 
 @media (max-width: 640px) {
