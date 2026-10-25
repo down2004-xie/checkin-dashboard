@@ -130,9 +130,9 @@ export const TOOLS: ToolDef[] = [
   {
     id: 'id-photo',
     name: '证件照处理',
-    description: '裁成常见证件尺寸，一键把纯色背景换成白/蓝/红',
+    description: '纯色背景换成白/蓝/红，裁成常见证件尺寸',
     category: 'image',
-    status: 'soon',
+    status: 'ready',
     icon: '🪪',
   },
   {

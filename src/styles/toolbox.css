@@ -584,6 +584,22 @@
   box-sizing: border-box;
 }
 
+/* ---------- 证件照 ---------- */
+
+.id-photo-preview {
+  display: flex;
+  justify-content: center;
+  margin: 12px 0;
+}
+
+.id-photo-preview img {
+  max-height: 420px;
+  width: auto;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: rgba(0, 0, 0, 0.22);
+}
+
 /* ---------- 移动端与降级 ---------- */
 
 @media (max-width: 640px) {

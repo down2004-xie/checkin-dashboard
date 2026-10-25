@@ -12,6 +12,7 @@ import { ImageWatermark } from './ImageWatermark'
 import { ImageConvert } from './ImageConvert'
 import { ImageCrop } from './ImageCrop'
 import { ImageMosaic } from './ImageMosaic'
+import { ImageIdPhoto } from './ImageIdPhoto'
 
 interface ToolboxViewProps {
   today: DateKey
@@ -67,6 +68,7 @@ export function ToolboxView({ today }: ToolboxViewProps) {
         {activeId === 'image-convert' && <ImageConvert />}
         {activeId === 'image-crop' && <ImageCrop />}
         {activeId === 'image-mosaic' && <ImageMosaic />}
+        {activeId === 'id-photo' && <ImageIdPhoto />}
       </section>
     )
   }
