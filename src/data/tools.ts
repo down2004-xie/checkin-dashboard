@@ -154,7 +154,7 @@ export const TOOLS: ToolDef[] = [
   {
     id: 'temp-share',
     name: '临时分享箱',
-    description: '上传文件生成取件码，对方凭码下载',
+    description: '上传文件生成取件码，对方凭码下载（需后端，纯静态站无法实现）',
     category: 'share',
     status: 'soon',
     icon: '📦',
@@ -164,7 +164,7 @@ export const TOOLS: ToolDef[] = [
     name: '有趣的网页分享',
     description: '站长精选的一批有意思的网站，点开即走',
     category: 'share',
-    status: 'soon',
+    status: 'ready',
     icon: '✨',
   },
 ]

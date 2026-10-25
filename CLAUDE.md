@@ -66,6 +66,7 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `image-stitch.ts` | 长图拼接：统一一边（纵向统一宽/横向统一高）+ 各图等比缩放的位置尺寸布局。不碰 Canvas |
 | `images-to-pdf.ts` | 手写最小 PDF 1.4（多图各一页，DCTDecode 直嵌 JPEG），xref 偏移用真实字节数算。不碰 Canvas |
 | `barcode.ts` | Code 128（Code Set B）编码：107 项标准模式表 + 校验和 + 模块序列。纯算法 |
+| `share-sites.ts` | 网页分享精选清单的分组（按分类、首次出现顺序）+ 模糊过滤。纯函数 |
 | `text-stats.ts` | 文本统计（字符/汉字/英文词/数字串/行/段/阅读时长）。中英混排逐字符状态机分词 |
 | `watermark.ts` | 水印坐标计算：九宫格锚点 + 平铺点位 + 颜色转 rgba + 对比阴影色。只算几何/颜色，不碰 Canvas |
 

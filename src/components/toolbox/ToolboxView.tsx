@@ -16,6 +16,7 @@ import { ImageIdPhoto } from './ImageIdPhoto'
 import { ImageStitch } from './ImageStitch'
 import { ImagesToPdf } from './ImagesToPdf'
 import { BarcodeTool } from './BarcodeTool'
+import { WebShare } from './WebShare'
 
 interface ToolboxViewProps {
   today: DateKey
@@ -75,6 +76,7 @@ export function ToolboxView({ today }: ToolboxViewProps) {
         {activeId === 'image-stitch' && <ImageStitch />}
         {activeId === 'pdf-convert' && <ImagesToPdf />}
         {activeId === 'qr-code' && <BarcodeTool />}
+        {activeId === 'web-share' && <WebShare />}
       </section>
     )
   }
