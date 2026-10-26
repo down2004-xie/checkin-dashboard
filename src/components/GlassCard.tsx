@@ -77,12 +77,20 @@ export function GlassCard({
    *
    * 动画播完由 animationend 摘类，而不是 setTimeout：
    * 动画时长改了这里不用跟着改，也不会出现「定时器比动画先到」的闪动。
+   *
+   * 但 reduced-motion / 静态模式下 CSS 已把动画设为 none ——
+   * animationend 永远不触发，摘类链断了，类会永久挂在按钮上。
+   * 所以这两种情况下干脆不挂类（判断条件与 useTweenNumber 一致）。
    */
   const prevChecked = useRef(checked)
   const [popping, setPopping] = useState(false)
 
   useEffect(() => {
-    if (checked && !prevChecked.current) setPopping(true)
+    if (checked && !prevChecked.current) {
+      const motionOff = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+        || document.documentElement.dataset.effects === 'static'
+      if (!motionOff) setPopping(true)
+    }
     prevChecked.current = checked
   }, [checked])
 

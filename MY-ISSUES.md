@@ -15,8 +15,8 @@
 | Shell | Git Bash (POSIX sh) |
 | Node | v22.17.0 |
 | 项目根目录 | `D:\Code\test\3\checkin-dashboard` |
-| 部署目标 | GitHub Pages + 二级域名（域名待填） |
-| 数据存储 | 浏览器 localStorage（无后端），当前格式版本 **5** |
+| 部署目标 | GitHub Pages + 二级域名 `ai0.tyu.me`（走的 Cloudflare 代理，页面里有 CF 注入的统计 beacon，见 #16） |
+| 数据存储 | 浏览器 localStorage（无后端），当前格式版本 **6** |
 | 浏览器验收 | 无 playwright 包；内核缓存在 `~/AppData/Local/ms-playwright/chromium-1217`，用 CDP 直接驱动（见 #11 和 PROGRESS.md） |
 
 > 很多「Bug」根因是环境。先记环境事实，能省一次重复排查。
@@ -495,6 +495,48 @@
   **都不影响构建**，暂时不动；要处理的话就是升 action 主版本，
   属于 CI 配置改动，按红线先问。
 
+### #16 全方位测试轮（2026-10-26）：reduced-motion 下勾选动画的摘类链断裂
+
+- **状态**：✅ 已解决（2026-10-26，当天防住 + 修复）
+- **发现方式**：用户要求「全方位测试、先不改动代码」。按方案跑了 A~G 六个阶段
+  （单测矩阵 / 签到链路人工项 / 工具箱边界 / 健壮性 / reduced-motion + 性能 / 线上站），
+  这条是 E 阶段脚本抓出来的 —— 现有 23 项浏览器回归没有覆盖
+  「reduced-motion 下**点一次**勾选」这个组合（`390px` 那项只验了树静止）。
+- **现象**：`prefers-reduced-motion: reduce`（或视觉效果=静态模式）下点勾选，
+  `card__toggle--pop` 类挂在按钮上**永不摘除**。
+- **原因**：摘类靠 `onAnimationEnd`（`GlassCard.tsx`），而 CSS 在这两种场景下把
+  `.card__toggle--pop` 的 `animation` 设为 `none` —— **动画不播，`animationend`
+  就永远不会来**。类挂着当时视觉上无害（CSS 已同时把动画关了），
+  但这是一个「状态机依赖被自己关掉的事件」的结构缝：以后任何给该类
+  加样式（比如 hover 态）的改动，都会在 reduced-motion 用户身上触发幽灵样式。
+- **解决**：挂类之前先查「动画是否必被关掉」——
+  `matchMedia('(prefers-reduced-motion: reduce)').matches || data-effects === 'static'`，
+  命中就直接不挂类。判断条件刻意和 `useTweenNumber` 的走同一条，
+  两处不一致就会出现「数字直达、按钮却挂着死类」的劈叉。
+- **验证**：`node shots/ef-phase-verify.mjs` 的断言 `classStuck` 从 `true` 变 `false`；
+  `npm run test:browser` 23 项全过；529 单测全过；`tsc --noEmit` 0 错误。
+  注入反验 = 该脚本的旧断言本来就在（修复前真实红过一次，见本轮测试记录）。
+- **同源风险**：`ProgressHeader` 的 `.header__subtitle--celebrate` 不走事件摘类
+  （key 换重挂载），无此问题；`toggle-ripple` 的 `::after` 在同一 CSS 块里被
+  `display: none`，独立于摘类链，无此问题。检查过，无兄弟隐患。
+- **关键学习**：
+  1. **凡是「动画播完由 animationend 收尾」的设计，必须同时回答：
+     「animation 被关掉时谁来收尾？」** 关动画的 CSS（`animation: none`）
+     和依赖动画事件的状态机可以来自完全不相干的两个文件 —— 静态读代码
+     很难撞见，只有「关掉动画再操作一遍」的测试能抓到。
+  2. 「视觉上无害」不等于「可以留着」：这条 bug 用户永远看不见，
+     但它是埋着的 —— 真正的判据不是「现在有没有害」而是「这个状态
+     在未来某种 CSS 下会不会变成幽灵」。修不修看维护成本，知道有这回事是底线。
+- **附带发现（同一轮测试，非 bug）**：
+  - 线上 `ai0.tyu.me` 走的是 Cloudflare 代理（GitHub Pages 之上包了一层），
+    页面里多一个 CF 统计 beacon 脚本 —— 不是本项目的代码，评估「外链/资源」
+    类测试时要排除它。
+  - `curl` 走 HTTP/2 访问该域会间歇性 000（协议协商失败），`--http1.1` 稳定。
+    排查线上资源时被这个假象耗过时间，记住先降级协议再下结论。
+  - 根目录 `smoke.test.tsx`（初始化时的临时渲染冒烟，注释写「验证完即删」）
+    仍在套件里且已进 git 历史 —— **用户决定先不删**（2026-10-26），如实记录。
+    因此全量单测是 32 文件 / 529 用例，比 PROGRESS 记录的 31/515 多一个文件。
+
 ---
 
 ## 修订记录
@@ -538,6 +580,14 @@
   - 孤儿清理的风险在于「自动清理会破坏加回同域名接回历史」，因此刻意做成
     「有孤儿才显示、点击前二次确认、只动 `records`」，并用 `shots/orphan-verify.mjs` 9 项守着。
   - 待解决表里「删站点后 records 留下孤儿记录」由 🟦 改为 ✅ 已解决。
+- 2026-10-26 应用户要求做了一轮**全方位测试**（先不动代码，跑完用户批准后才修）：
+  A 基线全绿 → B 签到链路 14 项 → C 工具箱边界 6 项 → D 健壮性 8 项 →
+  E/F reduced-motion + 性能 → G 线上站（含 v1 老数据真浏览器迁移）。
+  抓到 **#16**（reduced-motion 摘类链断裂）并经用户确认后修复；
+  顺带确认：根目录 `smoke.test.tsx` 仍在套件（用户拍板先不删，如实记录），
+  线上站落后本地 2 个提交（v6 未发布），`ai0.tyu.me` 走 Cloudflare 代理、
+  其 HTTP/2 对 curl 偶发 000（`--http1.1` 稳定）。修复后 529 单测（3 时区）/
+  `test:browser` 23 项全绿。
   验证：`npx tsc --noEmit` 0 错误；`npx vitest run` **515 用例**全过（`TZ=UTC` / `TZ=America/New_York` 各一遍）；
   `npm test:browser` 23 项；`appearance-verify` 9 项；`orphan-verify` 9 项。
 - 2026-10-26 **真折射玻璃实测**（阶段 16 最后一项，结论是「不做」）。
