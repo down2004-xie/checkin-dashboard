@@ -193,14 +193,14 @@
 
 .card:hover {
   background-color: var(--glass-bg-hover);
-  border-color: rgba(255, 255, 255, 0.26);
+  border-color: var(--border-hover);
   transform: translateY(-2px);
   /* 上浮必须配阴影扩散，否则卡片像贴在背景上平移，没有「浮起来」。
      两层：近处贴地的窄影 + 远处弥散的大影，比单层大影更像真实光照 */
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.28),
-    0 4px 12px rgba(0, 0, 0, 0.18),
-    0 14px 40px rgba(0, 0, 0, 0.22);
+    var(--shadow-card),
+    var(--shadow-card-float);
 }
 
 .card--done {
@@ -257,7 +257,7 @@
   place-items: center;
   border-radius: 50%;
   border: 1.5px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover-tint);
   cursor: pointer;
   font-size: 14px;
   line-height: 1;
@@ -269,8 +269,8 @@
 }
 
 .card__toggle:hover {
-  border-color: rgba(255, 255, 255, 0.4);
-  background: rgba(255, 255, 255, 0.12);
+  border-color: var(--border-strong);
+  background: var(--hover-tint-strong);
 }
 
 .card__toggle:active {
@@ -379,7 +379,7 @@
 .empty__hint code {
   padding: 2px 6px;
   border-radius: 5px;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-tint);
   font-size: 12px;
 }
 
@@ -389,7 +389,7 @@
   border-radius: 12px;
   border: 1px solid rgba(251, 146, 60, 0.4);
   background: rgba(251, 146, 60, 0.12);
-  color: #fdba74;
+  color: var(--warn);
   font-size: 13px;
   line-height: 1.6;
 }
@@ -439,11 +439,47 @@
   color: var(--accent);
 }
 
+/* ---------- 孤儿记录清理（有才显示） ---------- */
+
+.orphans {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 20px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--border-hover);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-inset);
+}
+
+.orphans__text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.orphans__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--warn);
+}
+
+.orphans__hint {
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--text-muted);
+}
+
 .btn {
   padding: 7px 14px;
   border-radius: var(--radius-pill);
   border: 1px solid var(--glass-border);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--hover-tint);
   cursor: pointer;
   font-size: 13px;
   transition:
@@ -452,8 +488,8 @@
 }
 
 .btn:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.34);
+  background: var(--hover-tint-strong);
+  border-color: var(--border-strong);
 }
 
 /* 仅供屏幕阅读器读取的元素（隐藏的文件输入用它） */
@@ -500,7 +536,7 @@
 
   /* 去掉模糊后必须把底色加实，否则文字压在渐变上读不清 */
   .card {
-    background: rgba(30, 36, 58, 0.72);
+    background: var(--card-fallback);
   }
 }
 
@@ -516,11 +552,11 @@
   .empty {
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
-    background: #1a2033;
+    background: var(--surface-inset-strong);
   }
 
   .ring::before {
-    background: #1a2033;
+    background: var(--surface-inset-strong);
   }
 }
 

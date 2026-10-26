@@ -1,5 +1,6 @@
 import type { CheckInData, DateKey, Preferences, Site, Todo } from '../types'
 import { mergeData } from './backup'
+import { removeOrphans } from './orphans'
 import { siteHost } from './site-form'
 
 export type CheckInAction =
@@ -20,6 +21,7 @@ export type CheckInAction =
   | { type: 'todoDoneSet'; day: DateKey; id: string; done: boolean }
   | { type: 'todoRestored'; day: DateKey; todo: Todo; index: number }
   | { type: 'todosCarried'; from: DateKey; day: DateKey }
+  | { type: 'orphansCleared' }
 
 /**
  * 所有写操作的纯函数实现。
@@ -97,6 +99,8 @@ export function applyAction(data: CheckInData, action: CheckInAction): CheckInDa
       if (!added.length) return data
       return { ...data, todos: { ...data.todos, [action.day]: [...(data.todos[action.day] ?? []), ...added] } }
     }
+    case 'orphansCleared':
+      return removeOrphans(data)
     case 'siteAdded':
       return handleSiteAdded(data, action.site)
     case 'sitesAdded':

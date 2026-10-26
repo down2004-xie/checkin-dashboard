@@ -430,7 +430,7 @@
 |---|---|---|---|
 | 中 | `parseBookmarks` 的 DOM 解析层无单测 | 🟦 暂时绕过 | 依赖 `DOMParser`，Vitest 默认的 node 环境没有（已确认 Node v22.17.0 下 `typeof DOMParser === 'undefined'`）。刻意不引入 jsdom，靠浏览器人工验收（样本见 `fixtures/sample-bookmarks.html`）。缓解措施是把不可测的部分圈到最小——只有这一个函数。**2026-10-12 起这条有了兜底**：`npm run test:browser` 里有一项专门在真实浏览器里跑它（`Bookmark HTML parser renders an import plan in a real browser`），不再是纯人工 |
 | 中 | 热力图强度依赖「当前站点总数」 | ✅ 已随 v5 解决 | v5 的 `targets` 快照已让 `summarizeDay` 优先读「当天的目标」，不再用当前站点总数。历史格子的深浅不会被今天增删站点改写。**注意**：历史记录若没有快照（v4 及以前），显示「目标未知」而不是推测 —— 刻意不伪造历史数据 |
-| 低 | 删站点后 records 留下孤儿记录 | 🟦 暂时绕过 | 刻意保留（用户加回同域名站点可恢复历史）。需要一个「清理未使用站点的记录」按钮，留阶段 16 |
+| 低 | 删站点后 records 留下孤儿记录 | ✅ 已解决（2026-10-26） | 新增 `lib/orphans.ts`（`findOrphans` / `removeOrphans`）+ `orphansCleared` action + `OrphanCleanup` 区块。**刻意不自动清理**（孤儿记录是恢复历史的锚，自动删会破坏「加回同域名接回历史」），只在有孤儿时渲染入口，点击前二次确认，只动 `records` 不碰 `targets`。浏览器 `shots/orphan-verify.mjs` 8 项守着 |
 | 低 | **v3 迁移救不回「迁移之前就已经删掉」的站点历史** | 🟦 无法解决 | 迁移只能重写**当前存在**的站点 id —— 要算出新身份得有 url，而孤儿记录里只有一个旧 id（如 `site-2`），没有任何东西记得它原本是哪个站。这部分信息在删除那一刻就永久丢失了。**现在起不会再有这个问题**（删了再加能接回），但迁移前丢的补不回来。迁移时选择保留这些孤儿而不是删掉：删用户数据得用户自己决定 |
 | 低 | 编辑站点改 url 后，id 与域名脱钩 | 🟦 暂时绕过 | `SiteForm` 编辑时保留原 id（id 是历史记录的锚，改了历史就断），所以「改 url」之后 `id !== siteIdFromUrl(url)`。后果：原来那个网址不能再作为新卡片加回来（会被判成重复）。取舍上优先保历史，这个副作用可接受 |
 | 低 | `GlassCard` 的 `href` 渲染层没有第二道防线 | 🟦 暂时绕过 | 当前取舍是「校验收敛到 `migrate.ts` 一处」（见 #8 遗留）：单一入口、好测、好讲。**代价是以后新增任何写站点的路径都必须走 `sanitizeSites`**，漏一条防线就失效。暂不加渲染层校验，避免两处标准漂移（那正是 #7 的教训） |
@@ -529,3 +529,14 @@
   待解决表新增两条：**时区维度没有自动守**（要真守得住得在 CI 上跑时区矩阵，
   属 CI 配置改动，按红线先问），以及**UTC 机器上这个 bug 原理上不可测**（🟦 无法解决）。
   新增测试中 3 条做过「注入旧实现会变红」的反验（偏好数组、保护模式误锁、同域走私）。
+- 2026-10-26 完成阶段 16 的两项：**亮色主题**（数据契约升 v6，`preferences.appearance` +
+  `LIGHT_PALETTES` / `resolvePalette`）和**清理孤儿记录**（`lib/orphans.ts` + `orphansCleared`）。
+  两项都**没有产生新的问题编号**：
+  - 亮色主题的风险在于「换变量不换色板」会得到浅底白字，这一点在设计时就用
+    「`useDaylight` 同时写 `data-appearance` 并调 `resolvePalette`」从结构上消掉，
+    再用 `shots/appearance-verify.mjs` 9 项断言钉住，不属于「踩坑」。
+  - 孤儿清理的风险在于「自动清理会破坏加回同域名接回历史」，因此刻意做成
+    「有孤儿才显示、点击前二次确认、只动 `records`」，并用 `shots/orphan-verify.mjs` 9 项守着。
+  - 待解决表里「删站点后 records 留下孤儿记录」由 🟦 改为 ✅ 已解决。
+  验证：`npx tsc --noEmit` 0 错误；`npx vitest run` **515 用例**全过（`TZ=UTC` / `TZ=America/New_York` 各一遍）；
+  `npm test:browser` 23 项；`appearance-verify` 9 项；`orphan-verify` 8 项。

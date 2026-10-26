@@ -46,7 +46,8 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `reducer.ts` | 所有写操作的纯函数（新增/删除/勾选站点、移动顺序、待办）。勾选只有 `checkedSet`（显式目标状态 + 拒绝暂停站点） |
 | `backup.ts` | 备份导出、解析、合并 |
 | `streak.ts` | 连续天数（全局 / 单站）、签到计数 |
-| `daylight.ts` | 时段配色色板 |
+| `orphans.ts` | 孤儿记录（指向已删站点的 `records` 条目）的统计与清理。删除不自动发生，必须用户显式触发；只动 `records`，不碰 `targets` 快照 |
+| `daylight.ts` | 时段色板（深色 `PALETTES` + 亮色 `LIGHT_PALETTES`）+ `resolvePalette(theme, appearance)`：明暗与色相两个正交维度 |
 | `heatmap.ts` | 热力图网格 + 强度分级 + `groupByWeek` / `monthLabel` |
 | `sites.ts` | 站点筛选/排序（搜索、分类、状态、置顶优先）+ `moveNeighbor`（**按可见列表**算换位邻居） |
 | `todo.ts` | 待办创建（`createTodo`，随机 UUID） |
@@ -117,11 +118,11 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 
 ## 数据约定
 
-localStorage 存一份带版本号的 JSON。**当前版本 5**：
+localStorage 存一份带版本号的 JSON。**当前版本 6**：
 
 ```ts
 {
-  version: 5,
+  version: 6,
   sites: [                                // 站点定义，顺序即页面展示顺序
     { id: "bilibili-com", name: "哔哩哔哩", url: "https://...", category: "视频",
       paused: false, pinned: false }
@@ -135,7 +136,7 @@ localStorage 存一份带版本号的 JSON。**当前版本 5**：
   targets: {                              // 日期 -> 当天的目标快照（v5 新增，见下）
     "2026-10-02": [{ id: "jd-com", name: "京东", url: "https://..." }]
   },
-  preferences: { theme: "auto", effects: "full", compact: false } // v5 新增
+  preferences: { theme: "auto", effects: "full", compact: false, appearance: "dark" } // v5 新增，v6 加 appearance
 }
 ```
 
@@ -158,8 +159,19 @@ localStorage 存一份带版本号的 JSON。**当前版本 5**：
 - 历史记录没有快照（`targets[day] === undefined`）时，`summarizeDay` 返回
   `total: null`，界面上显示「目标未知」而**不推测**完成率。迁移刻意不伪造
   历史快照 —— 那是编数据。
-- `preferences` 是主题/特效/紧凑三项用户偏好。它属于**用户数据和设备**两个判断的夹缝：
+- `preferences` 是主题/特效/紧凑/明暗四项用户偏好。它属于**用户数据和设备**两个判断的夹缝：
   目前按「数据」处理（进备份、合并时保留本机值），换设备想跟着走就带着它。
+
+**v6 相对 v5 的变化**：`preferences` 新增 `appearance: 'dark' | 'light'`（明暗外观）。
+
+- 纯加字段，老数据没有它 → `sanitizePreferences` 的 `pickOption` 退回 `'dark'`，
+  升级后外观不变，不会突然把用户从深色切到亮色。
+- **为什么升版本而不是"藏"在 CSS 里**：外观是用户偏好，必须进 localStorage 才能持久化，
+  而持久化的偏好属于数据契约，改契约就必须升版本 —— 这是项目铁律，不能因为「看起来只是个 CSS 开关」就绕过。
+- `appearance` 与 `theme` **正交**：`theme` 决定色相（清晨紫/晴日蓝…），`appearance` 决定明暗。
+  两者的组合在 `lib/daylight.ts` 的 `resolvePalette(theme, appearance)` 里落成一个具体色板。
+  `useDaylight` 同时做两件事：给 `<html>` 写 `data-appearance`（切 CSS 变量组）、用 `resolvePalette` 选色板。
+  **两者必须同时生效** —— 只换变量不换色板（或反之）会得到「浅底白字」的崩坏画面。
 
 ### 偏好校验的一条硬规则
 
@@ -200,9 +212,11 @@ v2 只能退回 `site-N`，而 N 取决于「当时哪些号没人占」——�
    v1 记录里的旧 id，全部变成孤儿 —— **v1 用户升级后历史归零，且不报任何错**。
    所以 `LEGACY_SEED_IDS` 那张表必须留着。`backup.test.ts` 有一条测试守着这条链。
 4. `records` 里可以存在指向已删站点的「孤儿记录」，这是**刻意保留**的：
-   用户重新添加同域名站点时历史能恢复。因此**统计「今日进度」必须用
-   `countCheckedValid`（只数当前存在的站点），不能用 `countChecked`**，
-   否则会出现进度环超过 100%。
+   用户重新添加同域名站点时历史能恢复。**清理必须由用户显式点击**
+   （页面底部的「清理孤儿记录」，没有孤儿时整块不渲染），绝不自动执行 ——
+   清理掉的历史无法恢复。清理只动 `records`，不碰 `targets` 快照。
+   因此**统计「今日进度」必须用 `countCheckedValid`（只数当前存在的站点），
+   不能用 `countChecked`**，否则会出现进度环超过 100%。
    注意：孤儿记录虽然永远匹配不到站点，但 `calcStreak`（全局连续天数）
    只判断「那天有没有记录」，**会把它算进去**。验「历史有没有断」必须用
    `calcSiteStreak`（单站），用 `calcStreak` 会得到假通过。

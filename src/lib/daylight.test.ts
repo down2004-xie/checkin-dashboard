@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { PALETTES, paletteForNow, phaseForHour } from './daylight'
+import { LIGHT_PALETTES, PALETTES, paletteForNow, phaseForHour, resolvePalette } from './daylight'
 
 describe('phaseForHour', () => {
   it('0-23 每一小时都有归属，不会落空', () => {
@@ -48,5 +48,45 @@ describe('paletteForNow', () => {
     for (const phase of ['dawn', 'day', 'dusk', 'night'] as const) {
       expect(Object.keys(PALETTES[phase]).sort()).toEqual(keys)
     }
+  })
+})
+
+describe('LIGHT_PALETTES / resolvePalette', () => {
+  it('亮色四套色板结构与深色一致，字段不缺失', () => {
+    const keys = Object.keys(PALETTES.night).sort()
+    for (const phase of ['dawn', 'day', 'dusk', 'night'] as const) {
+      expect(Object.keys(LIGHT_PALETTES[phase]).sort()).toEqual(keys)
+    }
+  })
+
+  it('亮色色板确实是「亮」的：背景色亮度高于深色版', () => {
+    // 防止把深色值抄进亮色色板（那样切过去看不出变化）
+    const luminance = (hex: string) => {
+      const v = hex.replace('#', '')
+      const r = parseInt(v.slice(0, 2), 16)
+      const g = parseInt(v.slice(2, 4), 16)
+      const b = parseInt(v.slice(4, 6), 16)
+      return 0.299 * r + 0.587 * g + 0.114 * b
+    }
+    for (const phase of ['dawn', 'day', 'dusk', 'night'] as const) {
+      expect(luminance(LIGHT_PALETTES[phase].bg1)).toBeGreaterThan(luminance(PALETTES[phase].bg1))
+      expect(luminance(LIGHT_PALETTES[phase].bg1)).toBeGreaterThan(200) // 足够浅
+    }
+  })
+
+  it('appearance=dark 走深色色板、light 走亮色色板', () => {
+    expect(resolvePalette('day', 'dark')).toBe(PALETTES.day)
+    expect(resolvePalette('day', 'light')).toBe(LIGHT_PALETTES.day)
+  })
+
+  it('theme=auto 时按小时选色相，明暗仍由 appearance 决定', () => {
+    const morning = new Date(2026, 9, 2, 6, 0) // dawn
+    expect(resolvePalette('auto', 'dark', morning)).toBe(PALETTES.dawn)
+    expect(resolvePalette('auto', 'light', morning)).toBe(LIGHT_PALETTES.dawn)
+  })
+
+  it('固定色相不受当前小时影响', () => {
+    const morning = new Date(2026, 9, 2, 6, 0)
+    expect(resolvePalette('night', 'light', morning)).toBe(LIGHT_PALETTES.night)
   })
 })

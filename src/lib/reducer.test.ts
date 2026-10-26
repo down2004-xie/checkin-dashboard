@@ -398,3 +398,16 @@ describe('todoRemoved', () => {
     expect(after.records).toEqual({ '2026-10-07': ['a'] })
   })
 })
+
+describe('orphansCleared', () => {
+  it('只删已删站点的记录，现存站点的记录原样保留', () => {
+    const before = makeData({ '2026-10-01': ['a', 'gone'], '2026-10-02': ['gone'] })
+    const after = applyAction(before, { type: 'orphansCleared' })
+    expect(after.records).toEqual({ '2026-10-01': ['a'] })
+  })
+
+  it('没有孤儿时返回同一个引用（不该触发无意义的重渲染和落盘）', () => {
+    const before = makeData({ '2026-10-01': ['a', 'b'] })
+    expect(applyAction(before, { type: 'orphansCleared' })).toBe(before)
+  })
+})

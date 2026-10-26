@@ -170,7 +170,7 @@
   font-size: 11px;
   padding: 2px 8px;
   border-radius: var(--radius-pill);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--hover-tint);
   color: var(--text-muted);
 }
 
@@ -217,7 +217,7 @@
   display: block;
   padding: 14px 16px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
   border: 1px solid var(--glass-border);
   font-size: 16px;
   color: var(--text-secondary);
@@ -244,7 +244,7 @@
   margin-bottom: 12px;
   border-radius: 12px;
   border: 1px solid var(--glass-border);
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
 }
 
 .countdown-result__label {
@@ -274,7 +274,7 @@
   padding: 16px;
   margin-top: 4px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
   border: 1px solid var(--glass-border);
 }
 
@@ -333,7 +333,7 @@
   gap: 4px;
   padding: 12px 14px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
   border: 1px solid var(--glass-border);
 }
 
@@ -392,7 +392,7 @@
   object-fit: cover;
   border-radius: 8px;
   border: 1px solid var(--glass-border);
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
 }
 
 .slice-item__download {
@@ -427,7 +427,7 @@
   object-fit: contain;
   border-radius: 10px;
   border: 1px solid var(--glass-border);
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
 }
 
 .compress-item figcaption {
@@ -447,7 +447,7 @@
   flex-wrap: wrap;
   padding: 12px 16px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
   border: 1px solid var(--glass-border);
 }
 
@@ -459,7 +459,7 @@
 
 .compress-summary__warn {
   font-size: 14px;
-  color: #fdba74;
+  color: var(--warn);
 }
 
 /* range 滑块在深色玻璃上的可见性 */
@@ -491,7 +491,7 @@
   gap: 2px;
   padding: 14px 10px;
   border-radius: 12px;
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
   border: 1px solid var(--glass-border);
 }
 
@@ -543,7 +543,7 @@
   width: auto;
   border-radius: 10px;
   border: 1px solid var(--glass-border);
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
 }
 
 /* ---------- 裁剪旋转翻转 ---------- */
@@ -597,7 +597,7 @@
   width: auto;
   border-radius: 10px;
   border: 1px solid var(--glass-border);
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
 }
 
 /* ---------- 条形码生成 ---------- */
@@ -651,7 +651,7 @@
   color: inherit;
   border-radius: var(--radius-card);
   border: 1px solid var(--glass-border);
-  background: rgba(0, 0, 0, 0.22);
+  background: var(--surface-inset);
   transition:
     background-color 0.2s ease,
     border-color 0.2s ease,
@@ -718,7 +718,7 @@
   }
 
   .tool-card {
-    background: rgba(30, 36, 58, 0.72);
+    background: var(--card-fallback);
   }
 
   .unit-field {

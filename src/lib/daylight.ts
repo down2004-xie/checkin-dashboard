@@ -79,3 +79,38 @@ export function phaseForHour(hour: number): DayPhase {
 export function paletteForNow(now: Date = new Date()): Palette {
   return PALETTES[phaseForHour(now.getHours())]
 }
+
+/**
+ * 亮色外观的四套色板（v6）。
+ *
+ * 为什么不能靠 CSS 反相：深色底的半透明白玻璃在浅底上会「洗白」，
+ * 文字对比度全崩。亮色必须单独设计一套：
+ * - 背景是浅色（高亮度），色相仍跟随时段（清晨偏紫、白天偏蓝…）；
+ * - accent 要压深，浅色底上用浅蓝会看不清；
+ * - glow 更淡（浅底上光晕很容易脏）。
+ * 文字色不在这里 —— 它由 tokens.css 的 [data-appearance='light'] 统一覆盖。
+ */
+export const LIGHT_PALETTES: Record<DayPhase, Palette> = {
+  // 清晨：淡紫白的天空
+  dawn: { bg1: '#f6f2ff', bg2: '#eae1fb', bg3: '#f2e8ff', glow: 'rgba(167, 139, 250, 0.12)', accent: '#7c3aed' },
+  // 白天：晴空蓝
+  day: { bg1: '#f2f7ff', bg2: '#e0ecfc', bg3: '#eef4ff', glow: 'rgba(96, 165, 250, 0.12)', accent: '#1d6fd6' },
+  // 黄昏：暖杏橙
+  dusk: { bg1: '#fff6f0', bg2: '#fde8da', bg3: '#fff1e7', glow: 'rgba(251, 146, 60, 0.12)', accent: '#c2570a' },
+  // 夜晚：浅靛灰（不是纯黑，否则和「夜晚」语义冲突；用一个安静的低饱和浅灰蓝）
+  night: { bg1: '#f2f4fa', bg2: '#e6e9f4', bg3: '#eef0f8', glow: 'rgba(129, 140, 248, 0.10)', accent: '#4f46e5' },
+}
+
+/**
+ * 取色板：appearance 决定明暗，theme 决定色相。
+ * theme='auto' 时按当前小时取色相；否则用用户选的固定色相。
+ * 这就是把「明暗」和「色相」两个正交维度拆开的落点 —— 12 种组合都成立。
+ */
+export function resolvePalette(
+  theme: 'auto' | DayPhase,
+  appearance: 'dark' | 'light',
+  now: Date = new Date(),
+): Palette {
+  const phase: DayPhase = theme === 'auto' ? phaseForHour(now.getHours()) : theme
+  return appearance === 'light' ? LIGHT_PALETTES[phase] : PALETTES[phase]
+}

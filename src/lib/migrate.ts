@@ -331,6 +331,8 @@ export function sanitizePreferences(raw: unknown): Preferences {
     theme: pickOption(raw.theme, ['auto', 'dawn', 'day', 'dusk', 'night'] as const, 'auto'),
     effects: pickOption(raw.effects, ['full', 'light', 'static'] as const, 'full'),
     compact: raw.compact === true,
+    // v6 新增。老数据没有这个字段 → pickOption 退回默认 'dark'，即升级后外观不变。
+    appearance: pickOption(raw.appearance, ['dark', 'light'] as const, 'dark'),
   }
 }
 

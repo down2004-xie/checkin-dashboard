@@ -78,9 +78,11 @@ export interface Preferences {
   theme: 'auto' | 'dawn' | 'day' | 'dusk' | 'night'
   effects: 'full' | 'light' | 'static'
   compact: boolean
+  /** 明暗外观（v6）。与 theme 正交：theme 决定色相，appearance 决定明暗 */
+  appearance: 'dark' | 'light'
 }
 
-export const DEFAULT_PREFERENCES: Preferences = { theme: 'auto', effects: 'full', compact: false }
+export const DEFAULT_PREFERENCES: Preferences = { theme: 'auto', effects: 'full', compact: false, appearance: 'dark' }
 
 /** localStorage 里存储的完整结构 */
 export interface CheckInData {
@@ -91,6 +93,8 @@ export interface CheckInData {
    * v2：加了 sites —— 站点定义入库，用户可增删改站点。
    * v3：站点 id 从「名字派生的 slug」改成「域名派生」，历史记录随之重写。
    * v4：加了 todos —— 按天归属的每日待办。纯新增字段，不重写既有数据。
+   * v5：加了 targets（每日目标快照）和 preferences（主题/特效/紧凑）。
+   * v6：preferences 加了 appearance（明暗外观）。纯新增枚举字段。
    * 以后加字段（备注、标签）时必须再 +1，并在 lib/migrate.ts 里写迁移分支。
    * 没有版本号就只能让用户清库重来。
    */
@@ -119,4 +123,4 @@ export interface CheckInData {
 }
 
 /** 当前的数据格式版本，与 CheckInData.version 对应 */
-export const DATA_VERSION = 5
+export const DATA_VERSION = 6

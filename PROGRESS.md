@@ -39,7 +39,7 @@
 - [x] 阶段 20.14：工具箱第十一个工具 —— 证件照处理（按颜色近似换背景 + 居中裁到证件尺寸）（2026-10-25）
 - [x] 阶段 21：并行三个工具 —— 长图拼接 / 图片转 PDF / Code128 条形码（多子代理并行，2026-10-25）
 - [x] 阶段 22：网页分享工具 + 临时分享箱如实标注（需后端，保持 soon）（2026-10-25）
-- [ ] 阶段 16（v4）：真折射玻璃实测、亮色主题、清理孤儿记录
+- [~] 阶段 16（杂项桶）：亮色主题 ✅ / 清理孤儿记录 ✅ / 真折射玻璃实测 ❌
 
 > 编号说明：16 是早就预留的「v4 杂项」桶，17 是临时插入的装饰功能，
 > 18 是待办，18.5 和 19 是 2026-10-12 补的。**不重编号** ——
@@ -53,7 +53,9 @@
 
 ## 当前进度
 
-**阶段 2~14、17、18、18.5、19 已全部写完，自动化验证通过。
+**阶段 2~14、17、18、18.5、19、20~22 已全部写完，自动化验证通过。
+阶段 16（杂项桶）里「亮色主题」「清理孤儿记录」已完成（2026-10-26）；
+只剩「真折射玻璃实测」未开始。
 阶段 15 的「部署」已完成，站点已上线；「绑定二级域名」未做。
 浏览器的人工验收大部分已被 `npm run test:browser`（23 项）接管，
 剩几条必须人手点的见「下一步」。**
@@ -401,6 +403,47 @@
   「需后端，纯静态站无法实现」**，不再让用户点了困惑
 - 至此工具箱 16 卡 **15 个可用**，仅剩「临时分享箱」因需后端保持 soon
 
+自动化验证结果（2026-10-26，阶段 16 亮色主题之后）：
+- **数据契约升 v6**：`preferences` 新增 `appearance: 'dark' | 'light'`。
+  外观是持久化偏好 → 属于数据契约 → 按项目铁律必须升版本（不能「藏在 CSS 里」）。
+  老数据无该字段，`sanitizePreferences` 的 `pickOption` 退回 `'dark'`，升级后外观不变。
+- 核心是 `resolvePalette(theme, appearance)`：`theme` 决定色相、`appearance` 决定明暗，两维正交。
+  `useDaylight(theme, appearance)` 同时做两件事：给 `<html>` 写 `data-appearance`
+  （切 `tokens.css` 里 `:root[data-appearance='light']` 那组变量）+ 用 `resolvePalette` 选色板。
+  **只做其一都会得到「浅底白字」崩坏画面**。
+- `LIGHT_PALETTES` 四套亮色板（dawn/day/dusk/night），背景亮度均 > 200 且高于对应深色版。
+- 硬编码色清理：`app.css`/`features.css`/`toolbox.css` 里散落的 `rgba(255,255,255,.06…)/rgba(0,0,0,.22…)/#fdba74/#1a2033`
+  等全部换成 `tokens.css` 新增的语义变量（`--surface-inset`、`--hover-tint`、`--border-hover`、
+  `--shadow-card`、`--warn`、`--card-fallback` 等），亮色块里逐条覆盖。这样切外观只切变量组，组件 CSS 不感知明暗。
+- `SettingsPanel` 新增「明暗外观」下拉（`select[aria-label="明暗外观"]`）。
+- `npx vitest run` → 30 个测试文件 / **503 个用例**全通过（新增 daylight 的 LIGHT_PALETTES/resolvePalette 5 条）
+- **多时区**：`TZ=UTC` → 503 全绿；`TZ=America/New_York` → 503 全绿
+- `npx tsc --noEmit` → 0 错误；`npx vite build --logLevel warn` → 成功（无告警输出）
+- `node scripts/browser-check.mjs` → 23 项全过（其中硬编码的 `version === 5` 断言改成 6 + appearance='dark'）
+- `node shots/toolbox-verify.mjs` → 21 项全过
+- `node shots/appearance-verify.mjs` → **9 项全过**：默认深色正文浅色 → 切浅色后正文 `rgb(15,23,42)`、
+  `--bg-1=#f2f4fa`、`--glass-bg` 为白色系 → 浅色下工具箱文字也是深色（无白字白底）→
+  刷新后浅色保持（已入库持久化）→ 切回深色正常 → 数据版本为 6。
+  截图人工确认：浅紫底、深墨字、白玻璃卡、樱花淡化，对比度正常。
+
+自动化验证结果（2026-10-26，阶段 16 清理孤儿记录之后）：
+- 新增 `lib/orphans.ts`：`findOrphans`（统计孤儿 id / 涉及天数 / 条目数，同一天同 id 只算一条）
+  + `removeOrphans`（剔除孤儿，某天清空就删 key，无变化返回原对象）。纯函数，不 import React。
+- 写操作走 `reducer`：新增 action `orphansCleared`，只调 `removeOrphans`。**不新增数据字段、不升版本**（仍是 v6）。
+- UI 是「有才显示」的 `components/OrphanCleanup.tsx`，挂在热力图和备份条之间。
+  没有孤儿时整块不渲染 —— 避免常驻一个不可逆的破坏性按钮诱导误点；
+  有孤儿时如实报数（N 条 / M 个已删站点 / K 天），点击前再 `confirm`，并把「以后加回同域名就接不回历史」讲清楚。
+- **为什么清理不自动做**：孤儿记录是刻意保留的（删卡片不删历史，加回同域名能接回）。
+  自动清理会破坏这个恢复能力，而清理本身不可逆 —— 只能用户显式点。
+- 只动 `records`，不碰 `targets` 快照（快照记的是当时确实存在的站点，站点后来被删不该改写历史）。
+- `npx tsc --noEmit` → 0 错误；`npx vitest run` → 31 文件 / **515 用例**全通过（新增 orphans.test.ts 9 条 + reducer 2 条）
+- `npx vite build --logLevel warn` → 成功
+- `node scripts/browser-check.mjs` → 23 项全过（签到主链路未受影响）
+- `node shots/orphan-verify.mjs` → **9 项全过**：无孤儿时区块不渲染 → 塞入带孤儿数据后报数正确（3 条/2 站点/2 天）
+  → 浅色下标题用深色警示色 rgb(180,83,9)（不是浅底亮橙）→ 清理前孤儿确实在存储里
+  → 点清理后孤儿全剔除、有效记录保留、只剩孤儿的日期 key 消失
+  → 顶部提示「已清理 3 条」→ 刷新后仍干净（真写盘）→ 站点清空时全部记录判为孤儿 → 版本仍为 6。
+
 自动化验证结果（2026-10-13，CI 首次跑通）：
 - **CI 第一次执行 `npm test` 就红了** —— 见 MY-ISSUES #15。不是新 bug：
   `date.test.ts` 的对照断言用了 `new Date(2026, 9, 2, 0, 30)`，
@@ -515,7 +558,7 @@ Vitest 默认跑在 node 环境没有这个 API（已确认 Node v22.17.0 下 `t
 
 1. **先跑一遍自动化确认基线是绿的**：
    `npm test && npm run build && npm run test:browser`
-   （当前应为 30 文件 / **498 用例**、构建成功、23 项浏览器场景通过。
+   （当前应为 31 文件 / **515 用例**、构建成功、23 项浏览器场景通过。
    **注意顺序**：`test:browser` 跑的是 `dist/`，必须先 build）
    想更保险再加一眼时区：`TZ=UTC npm test`
 2. **确认 CI 已经变绿** —— 见 MY-ISSUES #15：首次推送时 build job 在
@@ -599,6 +642,9 @@ Vitest 默认跑在 node 环境没有这个 API（已确认 Node v22.17.0 下 `t
 | **临时分享箱能不能做** | **不能（纯静态）** | 「上传文件生成取件码」必须有后端存文件。项目是纯静态站，标 `soon` 不实现，除非将来接第三方存储 |
 | **单位换算怎么实现** | **各量纲定一个基准单位，值先转基准再转出；温度单独走偏移公式** | 每对单位写一条换算率要 N² 条且必抄错；基准中转只需 N 条。温度有偏移量（非线性），不能用 factor |
 | **倒计时的天数怎么算** | **把两个纯日期折成 UTC 天序号相减，不用时间戳除 86400000** | 夏令时那天只有 23/25 小时，除法得小数、round 后会随季节偏一天。UTC 无夏令时，天序号差就是精确自然日差 |
+| **明暗外观怎么建模** | **`appearance` 与 `theme` 正交**：`theme` 定色相、`appearance` 定明暗 | 用户要的是「白天能看清」而不是「只能选清晨/晴日/黄昏/夜晚」。做成两维后 4 相 × 2 明暗 = 8 套组合，由 `resolvePalette(theme, appearance)` 一次算出一个具体色板 |
+| **外观开关要不要升数据版本** | **要，升 v6** | 外观是持久化偏好，持久化的偏好属于数据契约。看起来「只是个 CSS 开关」，但只要它进了 localStorage 就必须有版本和迁移分支，否则以后没法给老用户补默认值 |
+| **切外观时改变量还是改组件样式** | **只切 `data-appearance` 下的变量组，组件 CSS 不感知明暗** | 组件里写死颜色就等于把两套主题抄两遍，改一处漏一处。先把散落的 `rgba(255,255,255,.06)` 这类硬编码收敛成语义变量（`--hover-tint` / `--surface-inset` / `--shadow-card`…），再整组覆盖 |
 
 ## 已知缺口（故意留到以后）
 
@@ -607,14 +653,14 @@ Vitest 默认跑在 node 环境没有这个 API（已确认 Node v22.17.0 下 `t
 | 真·定时推送提醒 | 不做（除非加后端） | 纯静态站无法在页面关闭时唤醒 |
 | 真折射玻璃（SVG feDisplacementMap / WebGL） | 阶段 16 | Chrome 是否支持 `backdrop-filter: url()` **仍未实测**，需先做兼容性实验 |
 | 跨设备同步 | 阶段 16 | 需接 Supabase / Firebase 免费层 |
-| 清理孤儿记录 | 阶段 16 | 删站点后 records 里留着它的历史。当前刻意保留，需要一个「清理未使用站点的记录」按钮 |
+| 清理孤儿记录 | ✅ 已解决（2026-10-26） | `lib/orphans.ts` + `orphansCleared` action + `OrphanCleanup` 区块。平时不渲染（有孤儿才出现），点击前二次确认；只动 `records`，不碰 `targets` |
 | 热力图存「当天站点总数」 | ✅ 已解决（v5） | v5 的 `targets` 快照已经在数据层解决：`summarizeDay` 优先读当天的目标快照，增删站点不会再改写历史格子的深浅。没有快照的老记录显示「目标未知」而不推测 —— 刻意不伪造历史 |
 | 站点拖拽排序 | 阶段 16 | sites 已是数组、顺序已持久化，加拖拽不难，属于纯交互增强。现在的「前移/后移」按钮已经能调顺序（且按可见列表算邻居） |
 | IndexedDB + storage.persist() | 阶段 16 | 降低 localStorage 被清概率，当前数据量属过度设计 |
 | 环境光传感器（AmbientLightSensor） | 仅作彩蛋 | MDN 标注实验性、非 Baseline，不能作为依赖 |
 | `parseBookmarks` 的 DOM 解析层无单测 | ⚠️ 部分解决 | 依赖 `DOMParser`，node 环境没有。刻意不装 jsdom。**2026-10-12 起有兜底**：`npm run test:browser` 里有一项在真实浏览器里跑它（`Bookmark HTML parser renders an import plan in a real browser`），不再是纯人工 |
 | storage.ts 的浏览器环境单测 | ✅ 已补（2026-10-12） | v5 改动引入了 `protected persistence` 一组共 16 条：用手写的 Map 假 localStorage + `vi.stubGlobal` 覆盖了读保护、配额满、无 locks 时的陈旧写入、多标签串行、恢复前归档、快照不重复落盘 |
-| 亮色主题 | 阶段 16 | 需要重做玻璃卡片的对比度体系 |
+| 亮色主题 | ✅ 已解决（v6，2026-10-26） | `preferences.appearance` + `LIGHT_PALETTES` + `resolvePalette`，硬编码色已换成语义变量；`shots/appearance-verify.mjs` 9 项浏览器断言守着「切过去不能白字白底」 |
 | v3 迁移前就已删除的站点，历史永久失联 | 不处理 | 迁移要算新身份得有 url，孤儿记录里只有一个旧 id，信息在删除那刻就丢了。**v3 之后不会再有这个问题**（删了再加能接回），但迁移前丢的补不回来 |
 | 迁移在真实 localStorage 上的行为 | ⚠️ 部分解决（2026-10-12） | `npm run test:browser` 的第一项就跑通了「空库打开 → 落盘 v5 → 建当天快照」，真实链路有覆盖了。**没覆盖的是「老版本真实数据升上来」** —— 单测里 v1→v5 有链式测试，但没在真浏览器里塞一份 v1 的 localStorage 跑过 |
 | 樱花的**视觉**效果无自动化验收 | 阶段 16 | `lib/sakura.ts` 的生成逻辑有 27 条单测（确定性 + 方向分散度），但「树看起来像不像树」「爆发像不像从树下涌起」只能靠人眼。项目刻意不引入 jsdom，视觉回归要额外引 Playwright + 基线图管理，对当前体量不划算。现在 `npm run test:browser` 会截 `desktop.png` / `mobile.png` 两张图，但那只是**留档**，没有基线比对 |
@@ -677,8 +723,10 @@ TZ=America/New_York npm test # 反向半球也扫一下
 **长图拼接**（统一边、等比缩放、gap 计入、空/单图）、
 **PDF**（结构头/尾、页数、xref 偏移真能解析到 `N 0 obj`）、
 **条形码**（Code128 模式表、校验和公式、START/STOP、模块长度）、
-**网页分享**（按分类分组、组顺序首次出现、模糊过滤、大小写不敏感）。
-共 30 个测试文件 / 498 个用例。
+**网页分享**（按分类分组、组顺序首次出现、模糊过滤、大小写不敏感）、
+**明暗色板**（亮色结构与深色一致、亮度确实更高、dark/light 路由、auto 按时辰选色相但明暗仍由 appearance 决定）、
+**孤儿记录**（统计去重、暂停站点不算孤儿、只动 records、清空的天删 key、无变化返回原引用、幂等）。
+共 31 个测试文件 / 515 个用例。
 
 其中重点守着的几条：
 - `migrate.test.ts` —— v2→v3 的塌陷合并、新旧 id 交叉不互相污染、v1 链条、
@@ -768,3 +816,11 @@ npm run test:browser   # → 23 项场景 + 截图，落在 shots/regression/（
 
 **这套东西没纳入 CI** —— 它要起服务和浏览器，和「纯函数单测」是两个层次的成本，
 混进 `npm test` 会让它从 2 秒变成分钟级。见「已知缺口」里那条。
+
+另有三个**专项**脚本（同样零新依赖、跑完自动清理、截图默认写临时目录）：
+- `node shots/toolbox-verify.mjs` → 21 项，逐个工具点一遍 + 移动端溢出检查
+- `node shots/appearance-verify.mjs` → 9 项，明暗切换全链路（含刷新后持久化、版本号 = 6）
+- `node shots/orphan-verify.mjs` → 9 项，孤儿记录统计 / 清理 / 落盘 / 浅色可见性 / 生效边界
+
+它们是「改到哪个大块就跑哪个」，没有并进 `browser-check.mjs`：主回归脚本只跑签到主链路，
+工具和外观的交互细节放专项脚本里，失败时定位更快。

@@ -19,6 +19,7 @@ import { Heatmap } from './components/Heatmap'
 import { SiteForm } from './components/SiteForm'
 import { BookmarkImport } from './components/BookmarkImport'
 import { BackupBar } from './components/BackupBar'
+import { OrphanCleanup } from './components/OrphanCleanup'
 import { TodoPanel } from './components/TodoPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SakuraTree } from './components/SakuraTree'
@@ -44,7 +45,7 @@ export function App() {
   const today = useToday()
   const { data, issue, raw, error, busy, run, recover, refresh } = useCheckInStore(today)
   const { preferences, sites } = data
-  useDaylight(preferences.theme)
+  useDaylight(preferences.theme, preferences.appearance)
   usePointerLight(preferences.effects === 'full')
   const [view, setView] = useState<'dashboard' | 'tools'>('dashboard')
   const [notice, setNotice] = useState<string | null>(null)
@@ -150,6 +151,10 @@ export function App() {
     setNotice('已导出备份文件')
   }
 
+  const clearOrphans = async (entryCount: number) => {
+    if (await run({ type: 'orphansCleared' })) setNotice(`已清理 ${entryCount} 条历史残留记录`)
+  }
+
   return (
     <main className="app">
       <SakuraTree fullBloom={total > 0 && done === total} />
@@ -218,6 +223,7 @@ export function App() {
         {undo && <div className="notice" role="status">已删除「{undo.todo.text}」<button type="button" className="chip" onClick={async () => { if (await run({ type: 'todoRestored', ...undo })) setUndo(null) }}>撤销删除</button><button type="button" className="chip" onClick={() => setUndo(null)} aria-label="关闭撤销提示">×</button></div>}
       </fieldset>
       <Heatmap data={data} today={today} />
+      <OrphanCleanup data={data} busy={busy || !!issue} onClear={(count) => void clearOrphans(count)} />
       <BackupBar notice={null} onExport={() => exportData(data)} onImportClick={() => fileInputRef.current?.click()} />
       <input ref={fileInputRef} type="file" accept="application/json,.json" className="visually-hidden" disabled={readingFile || busy}
         onChange={(event) => { const file = event.target.files?.[0]; if (file) void handleFile(file, 'backup'); event.target.value = '' }} />

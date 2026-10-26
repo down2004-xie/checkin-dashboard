@@ -17,7 +17,7 @@ describe('version 5 migration and input validation', () => {
     expect(data.version).toBe(DATA_VERSION)
     expect(data.targets).toEqual({})
     expect(data.todos[today]).toEqual([todo])
-    expect(data.preferences).toEqual({ theme: 'auto', effects: 'full', compact: false })
+    expect(data.preferences).toEqual({ theme: 'auto', effects: 'full', compact: false, appearance: 'dark' })
     expect(migrate(data)).toEqual(data)
   })
 
@@ -73,10 +73,14 @@ describe('version 5 migration and input validation', () => {
     // 下游 `PALETTES[['auto']]` 取到 undefined → `palette.bg1` 抛异常 → 整页白屏，
     // 且用户没法在界面里修（设置面板此刻也读不出合法值）。
     // 但凡 `as` 断言的校验都要问一句：判断用的值和返回的值是同一个吗？
-    expect(sanitizePreferences({ theme: ['auto'], effects: ['full'] })).toEqual({ theme: 'auto', effects: 'full', compact: false })
-    expect(sanitizePreferences({ theme: { toString: () => 'night' }, effects: 1 })).toEqual({ theme: 'auto', effects: 'full', compact: false })
-    expect(sanitizePreferences({ theme: 'night', effects: 'static', compact: 'true' })).toEqual({ theme: 'night', effects: 'static', compact: false })
-    expect(sanitizePreferences(null)).toEqual({ theme: 'auto', effects: 'full', compact: false })
+    const expected = { theme: 'auto', effects: 'full', compact: false, appearance: 'dark' }
+    expect(sanitizePreferences({ theme: ['auto'], effects: ['full'] })).toEqual(expected)
+    expect(sanitizePreferences({ theme: { toString: () => 'night' }, effects: 1 })).toEqual(expected)
+    expect(sanitizePreferences({ theme: 'night', effects: 'static', compact: 'true' })).toEqual({ theme: 'night', effects: 'static', compact: false, appearance: 'dark' })
+    expect(sanitizePreferences(null)).toEqual(expected)
+    // v6：appearance 也要走同样的枚举校验，绝不接受数组
+    expect(sanitizePreferences({ appearance: ['light'] })).toEqual(expected)
+    expect(sanitizePreferences({ appearance: 'light' })).toEqual({ theme: 'auto', effects: 'full', compact: false, appearance: 'light' })
   })
 
   it.each([0, -1, 1.5, DATA_VERSION + 1])('rejects invalid backup version %s', (version) => {
@@ -108,7 +112,7 @@ describe('version 5 migration and input validation', () => {
   it('round trips settings, snapshots, paused and pinned sites', () => {
     const data = emptyData()
     data.sites = [{ ...site, paused: true, pinned: true }]
-    data.preferences = { theme: 'night', effects: 'static', compact: true }
+    data.preferences = { theme: 'night', effects: 'static', compact: true, appearance: 'light' }
     data.targets[yesterday] = [site]
     const result = parseBackup(serializeBackup(createBackup(data)))
     expect(result.ok).toBe(true)

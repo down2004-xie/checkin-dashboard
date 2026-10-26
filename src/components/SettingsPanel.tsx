@@ -13,6 +13,9 @@ export function SettingsPanel({ value, onChange }: SettingsPanelProps) {
         <label>主题配色<select aria-label="主题配色" value={value.theme} onChange={(event) => onChange({ theme: event.target.value as Preferences['theme'] })}>
           <option value="auto">跟随时段</option><option value="dawn">清晨紫</option><option value="day">晴日蓝</option><option value="dusk">落日橙</option><option value="night">静夜靛</option>
         </select></label>
+        <label>明暗外观<select aria-label="明暗外观" value={value.appearance} onChange={(event) => onChange({ appearance: event.target.value as Preferences['appearance'] })}>
+          <option value="dark">深色</option><option value="light">浅色</option>
+        </select></label>
         <label>视觉效果<select aria-label="视觉效果" value={value.effects} onChange={(event) => onChange({ effects: event.target.value as Preferences['effects'] })}>
           <option value="full">完整特效</option><option value="light">轻量特效</option><option value="static">静态模式</option>
         </select></label>

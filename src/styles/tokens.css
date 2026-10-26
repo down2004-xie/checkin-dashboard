@@ -61,6 +61,77 @@
   color-scheme: dark;
 }
 
+/* ============================================================
+ * 亮色外观（v6）
+ *
+ * 由 useDaylight 在 <html> 上写 data-appearance='light' 触发。
+ *
+ * 为什么是一整块变量覆盖而不是几行微调：深色方案的每一层都建立在
+ * 「浅色元素画在深色底上」这个前提上 —— 白字、白色半透明玻璃、
+ * 黑色半透明输入框底。亮色必须整体反相：深字、暗玻璃、浅色压暗。
+ * 只改个别颜色会得到「浅底上白字看不见」这种崩坏。
+ *
+ * 注意这里也定义了 --surface-* 系列：以前各组件里直接写死的
+ * rgba(0,0,0,.22) 改成引用这些变量，亮色下才会跟着变。
+ * ============================================================ */
+:root[data-appearance='light'] {
+  /* 玻璃：浅底上用「黑」做半透明，才能形成压在纸面上的玻璃片 */
+  --glass-bg: rgba(255, 255, 255, 0.62);
+  --glass-bg-hover: rgba(255, 255, 255, 0.82);
+  --glass-border: rgba(15, 23, 42, 0.14);
+  --glass-inset: inset 0 1px 0 rgba(255, 255, 255, 0.9);
+
+  /* 文字：深墨色，三级透明度 */
+  --text-primary: rgba(15, 23, 42, 0.92);
+  --text-secondary: rgba(15, 23, 42, 0.62);
+  --text-muted: rgba(15, 23, 42, 0.42);
+
+  /* 语义色的半透明底要跟着换（深色下是加亮，亮色下要压暗） */
+  --accent-soft: rgba(29, 111, 214, 0.12);
+  --done-soft: rgba(22, 163, 74, 0.12);
+  --done: #15803d;
+
+  /* 内嵌面（输入框、结果区、预览容器）：浅底上要比卡片更深一点才分得清 */
+  --surface-inset: rgba(15, 23, 42, 0.06);
+  --surface-inset-strong: rgba(15, 23, 42, 0.10);
+  /* 悬停/激活态的白高光在亮色下要反过来变暗 */
+  --hover-tint: rgba(15, 23, 42, 0.06);
+  --hover-tint-strong: rgba(15, 23, 42, 0.10);
+
+  /* 樱花在浅底上要压淡，否则粉团糊住内容 */
+  --sakura-branch: #9c8792;
+  --sakura-mist: rgba(255, 158, 196, 0.13);
+  --sakura-glow: rgba(255, 158, 196, 0.10);
+
+  color-scheme: light;
+}
+
+/* 深色外观下对应的变量（放在默认层，亮色块会覆盖它们） */
+:root {
+  --surface-inset: rgba(0, 0, 0, 0.22);
+  --surface-inset-strong: rgba(0, 0, 0, 0.32);
+  --hover-tint: rgba(255, 255, 255, 0.06);
+  --hover-tint-strong: rgba(255, 255, 255, 0.12);
+  /* 卡片悬停/聚焦时的边框高亮（深色下提亮，亮色下加深） */
+  --border-hover: rgba(255, 255, 255, 0.26);
+  --border-strong: rgba(255, 255, 255, 0.34);
+  --shadow-card: 0 4px 12px rgba(0, 0, 0, 0.18);
+  --shadow-card-float: 0 14px 40px rgba(0, 0, 0, 0.22);
+  /* 警告/错误文字色（浅底上要加深才有对比度） */
+  --warn: #fdba74;
+  /* 移动端去掉模糊后的实色卡片底（必须在背景之上、文字之下） */
+  --card-fallback: rgba(30, 36, 58, 0.72);
+}
+
+:root[data-appearance='light'] {
+  --border-hover: rgba(15, 23, 42, 0.24);
+  --border-strong: rgba(15, 23, 42, 0.32);
+  --shadow-card: 0 4px 12px rgba(15, 23, 42, 0.08);
+  --shadow-card-float: 0 14px 40px rgba(15, 23, 42, 0.12);
+  --warn: #b45309;
+  --card-fallback: rgba(255, 255, 255, 0.86);
+}
+
 /* 减少动效偏好：关掉过渡和光源跟随 */
 @media (prefers-reduced-motion: reduce) {
   :root {
