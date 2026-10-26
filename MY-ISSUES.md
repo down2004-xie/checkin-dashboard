@@ -539,4 +539,20 @@
     「有孤儿才显示、点击前二次确认、只动 `records`」，并用 `shots/orphan-verify.mjs` 9 项守着。
   - 待解决表里「删站点后 records 留下孤儿记录」由 🟦 改为 ✅ 已解决。
   验证：`npx tsc --noEmit` 0 错误；`npx vitest run` **515 用例**全过（`TZ=UTC` / `TZ=America/New_York` 各一遍）；
-  `npm test:browser` 23 项；`appearance-verify` 9 项；`orphan-verify` 8 项。
+  `npm test:browser` 23 项；`appearance-verify` 9 项；`orphan-verify` 9 项。
+- 2026-10-26 **真折射玻璃实测**（阶段 16 最后一项，结论是「不做」）。
+  用零依赖探针 `shots/backdrop-support-probe.mjs` 在本机 Edge 156 上验明：
+  `backdrop-filter: url(#svgFilter)` **确实生效**（黑白竖条纹被 feDisplacementMap 弯成波浪），
+  但 `CSS.supports('-webkit-backdrop-filter','url(#disp)')` 为 `false`、Safari/iOS 大概率走不通，
+  且逐像素位移在卡片多时必掉帧（红线 1），维护成本也不成比例。
+  **不产生问题编号**：这不是 bug，是一次「技术可行但主动放弃」的取舍，
+  结论记在 PROGRESS.md 的验证记录与已知缺口表。
+  > 教训：我最初凭印象判断「Chromium 不支持、很可能白做」，实测直接推翻了它。
+  > 兼容性这种事必须以探针/文档为准，不能凭记忆下结论 —— 这条比结论本身更值得记。
+- 2026-10-26 把剩余「只能人工点」的验收转成自动化：新增 `shots/acceptance-verify.mjs`（8 项全过），
+  覆盖「删掉再加接回历史」「表单三条判重」「点卡片跳转」「悬停高光」「v1 老备份导入」。
+  **不产生问题编号**：本轮是补验证、没改产品代码，也没发现新 bug ——
+  但正因如此更值得记一笔：这些路径一直标着「没在真浏览器里点过」，
+  补验后确认行为符合设计，把「已知的不确定」变成了「已知的确定」。
+  唯一的小插曲是脚本自己写错了两处预期（`today` 还没落盘就读取、`normalizeUrl` 补结尾斜杠），
+  属于测试代码的问题，按规矩不进问题列表。
