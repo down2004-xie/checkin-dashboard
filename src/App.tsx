@@ -202,7 +202,8 @@ export function App() {
           onEdit={(siteId) => { setEditingId(siteId); setShowAddForm(false); setBookmarkPlan(null) }}
           onRemove={async (id) => { if (window.confirm('删除此站点？历史记录和已保存的每日目标仍会保留。')) { if (await run({ type: 'siteRemoved', id })) setNotice('已删除站点，历史记录保留') } }}
           onUpdate={(id, patch) => void run({ type: 'siteUpdated', id, patch })}
-          onMove={(id, targetId) => void run({ type: 'siteMoved', id, targetId })} />
+          onMove={(id, targetId) => void run({ type: 'siteMoved', id, targetId })}
+          onReorder={(id, targetId) => void run({ type: 'siteReordered', id, targetId })} />
 
         {(showAddForm || editingSite) && <div className="site-form-wrap"><SiteForm key={editingSite?.id ?? 'new'} initial={editingSite}
           existingHosts={takenHosts} existingIds={validIds} onSubmit={(site) => void handleSiteSubmit(site)} onCancel={() => { setEditingId(null); setShowAddForm(false) }} /></div>}

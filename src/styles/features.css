@@ -524,6 +524,30 @@
   }
 }
 
+/* ---------- 拖拽排序把手 + 拖拽视觉反馈 ---------- */
+
+/* 把手：grab 光标 + 禁用触摸滚动/文本选中，否则拖拽会被浏览器手势抢走 */
+.card__handle {
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.card__handle:active {
+  cursor: grabbing;
+}
+
+/* 被拖动的那张卡：半透明，表示「正在被拎起来」 */
+.card--dragging {
+  opacity: 0.55;
+}
+
+/* 当前落点：主题色描边，提示松手会落到这里 */
+.card--drop-target {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .chip,
   .card__icon,

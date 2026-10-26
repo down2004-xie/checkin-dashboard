@@ -186,6 +186,13 @@
   box-shadow: var(--glass-inset);
 }
 
+/* 懒加载工具 chunk 时的占位。留一小段高度，避免加载前后布局明显跳动 */
+.toolbox__loading {
+  margin: 0;
+  padding: 24px 0;
+  text-align: center;
+}
+
 /* 单位换算的行布局 */
 .unit-row {
   display: flex;

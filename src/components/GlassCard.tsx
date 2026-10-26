@@ -27,6 +27,14 @@ interface GlassCardProps {
   moveUpTargetId: string | null
   /** 后移的目标 id；null 表示不能后移 */
   moveDownTargetId: string | null
+  /** 是否手动顺序排列 —— 只有手动顺序下才显示拖拽把手（其它排序拖了也会被重排回去） */
+  manualOrder: boolean
+  /** 是否正被拖动（拖拽中的视觉反馈：半透明） */
+  dragging: boolean
+  /** 是否是当前拖拽的落点（高亮边框） */
+  dropTarget: boolean
+  /** 按下拖拽把手，开始拖动。带上指针起点，供上层判断是否超过阈值、算落点 */
+  onDragStart: (siteId: string, point: { x: number; y: number }) => void
 }
 
 /**
@@ -53,6 +61,10 @@ export function GlassCard({
   onMove,
   moveUpTargetId,
   moveDownTargetId,
+  manualOrder,
+  dragging,
+  dropTarget,
+  onDragStart,
 }: GlassCardProps) {
   const { handlePointerMove, handlePointerLeave } = useCardHighlight()
 
@@ -76,7 +88,8 @@ export function GlassCard({
 
   return (
     <div
-      className={`card${checked ? ' card--done' : ''}${site.paused ? ' card--paused' : ''}`}
+      className={`card${checked ? ' card--done' : ''}${site.paused ? ' card--paused' : ''}${dragging ? ' card--dragging' : ''}${dropTarget ? ' card--drop-target' : ''}`}
+      data-site-id={site.id}
       onPointerMove={handlePointerMove}
       onPointerLeave={handlePointerLeave}
     >
@@ -91,6 +104,22 @@ export function GlassCard({
         </a>
 
         <div className="card__actions">
+          {manualOrder && (
+            <button
+              type="button"
+              className="card__icon card__handle"
+              aria-label={`拖动排序 ${site.name}`}
+              title="拖动排序"
+              onPointerDown={(event) => {
+                event.preventDefault()
+                event.currentTarget.setPointerCapture(event.pointerId)
+                onDragStart(site.id, { x: event.clientX, y: event.clientY })
+              }}
+            >
+              ⠿
+            </button>
+          )}
+
           <button
             type="button"
             className="card__icon"

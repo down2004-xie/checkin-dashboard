@@ -1,22 +1,25 @@
-import { useMemo, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useMemo, useState, type CSSProperties } from 'react'
 
 import type { DateKey } from '../../types'
 import { TOOLS, TOOL_CATEGORIES, filterTools, searchTools, type ToolCategory, type ToolDef } from '../../data/tools'
-import { UnitConverter } from './UnitConverter'
-import { CountdownTool } from './CountdownTool'
-import { RandomPick } from './RandomPick'
-import { ImageSlice } from './ImageSlice'
-import { ImageCompress } from './ImageCompress'
-import { TextStatsTool } from './TextStatsTool'
-import { ImageWatermark } from './ImageWatermark'
-import { ImageConvert } from './ImageConvert'
-import { ImageCrop } from './ImageCrop'
-import { ImageMosaic } from './ImageMosaic'
-import { ImageIdPhoto } from './ImageIdPhoto'
-import { ImageStitch } from './ImageStitch'
-import { ImagesToPdf } from './ImagesToPdf'
-import { BarcodeTool } from './BarcodeTool'
-import { WebShare } from './WebShare'
+
+// 每个工具单独打成一个 chunk：签到看板是主视图，不该为了偶尔用一次的工具
+// 预先加载全部工具箱 JS。只有点进某个工具时才去拉它那一份。
+const UnitConverter = lazy(() => import('./UnitConverter').then((module) => ({ default: module.UnitConverter })))
+const CountdownTool = lazy(() => import('./CountdownTool').then((module) => ({ default: module.CountdownTool })))
+const RandomPick = lazy(() => import('./RandomPick').then((module) => ({ default: module.RandomPick })))
+const ImageSlice = lazy(() => import('./ImageSlice').then((module) => ({ default: module.ImageSlice })))
+const ImageCompress = lazy(() => import('./ImageCompress').then((module) => ({ default: module.ImageCompress })))
+const TextStatsTool = lazy(() => import('./TextStatsTool').then((module) => ({ default: module.TextStatsTool })))
+const ImageWatermark = lazy(() => import('./ImageWatermark').then((module) => ({ default: module.ImageWatermark })))
+const ImageConvert = lazy(() => import('./ImageConvert').then((module) => ({ default: module.ImageConvert })))
+const ImageCrop = lazy(() => import('./ImageCrop').then((module) => ({ default: module.ImageCrop })))
+const ImageMosaic = lazy(() => import('./ImageMosaic').then((module) => ({ default: module.ImageMosaic })))
+const ImageIdPhoto = lazy(() => import('./ImageIdPhoto').then((module) => ({ default: module.ImageIdPhoto })))
+const ImageStitch = lazy(() => import('./ImageStitch').then((module) => ({ default: module.ImageStitch })))
+const ImagesToPdf = lazy(() => import('./ImagesToPdf').then((module) => ({ default: module.ImagesToPdf })))
+const BarcodeTool = lazy(() => import('./BarcodeTool').then((module) => ({ default: module.BarcodeTool })))
+const WebShare = lazy(() => import('./WebShare').then((module) => ({ default: module.WebShare })))
 
 interface ToolboxViewProps {
   today: DateKey
@@ -62,21 +65,23 @@ export function ToolboxView({ today }: ToolboxViewProps) {
           <button type="button" className="btn" onClick={() => setActiveId(null)}>← 返回工具列表</button>
           <h1 className="toolbox__title toolbox__title--inline">{tool?.icon} {tool?.name}</h1>
         </div>
-        {activeId === 'unit-convert' && <UnitConverter />}
-        {activeId === 'countdown' && <CountdownTool today={today} />}
-        {activeId === 'random-pick' && <RandomPick />}
-        {activeId === 'image-grid' && <ImageSlice />}
-        {activeId === 'image-compress' && <ImageCompress />}
-        {activeId === 'text-stats' && <TextStatsTool />}
-        {activeId === 'image-watermark' && <ImageWatermark />}
-        {activeId === 'image-convert' && <ImageConvert />}
-        {activeId === 'image-crop' && <ImageCrop />}
-        {activeId === 'image-mosaic' && <ImageMosaic />}
-        {activeId === 'id-photo' && <ImageIdPhoto />}
-        {activeId === 'image-stitch' && <ImageStitch />}
-        {activeId === 'pdf-convert' && <ImagesToPdf />}
-        {activeId === 'qr-code' && <BarcodeTool />}
-        {activeId === 'web-share' && <WebShare />}
+        <Suspense fallback={<p className="hint toolbox__loading">正在加载工具…</p>}>
+          {activeId === 'unit-convert' && <UnitConverter />}
+          {activeId === 'countdown' && <CountdownTool today={today} />}
+          {activeId === 'random-pick' && <RandomPick />}
+          {activeId === 'image-grid' && <ImageSlice />}
+          {activeId === 'image-compress' && <ImageCompress />}
+          {activeId === 'text-stats' && <TextStatsTool />}
+          {activeId === 'image-watermark' && <ImageWatermark />}
+          {activeId === 'image-convert' && <ImageConvert />}
+          {activeId === 'image-crop' && <ImageCrop />}
+          {activeId === 'image-mosaic' && <ImageMosaic />}
+          {activeId === 'id-photo' && <ImageIdPhoto />}
+          {activeId === 'image-stitch' && <ImageStitch />}
+          {activeId === 'pdf-convert' && <ImagesToPdf />}
+          {activeId === 'qr-code' && <BarcodeTool />}
+          {activeId === 'web-share' && <WebShare />}
+        </Suspense>
       </section>
     )
   }

@@ -1,5 +1,6 @@
 import type { CheckInData, DateKey, Preferences, Site, Todo } from '../types'
 import { mergeData } from './backup'
+import { canReorder } from './sites'
 import { removeOrphans } from './orphans'
 import { siteHost } from './site-form'
 
@@ -16,6 +17,7 @@ export type CheckInAction =
   | { type: 'dayStarted'; day: DateKey }
   | { type: 'checkedSet'; day: DateKey; siteId: string; checked: boolean }
   | { type: 'siteMoved'; id: string; targetId: string }
+  | { type: 'siteReordered'; id: string; targetId: string }
   | { type: 'preferencesChanged'; patch: Partial<Preferences> }
   | { type: 'todoEdited'; day: DateKey; id: string; text: string }
   | { type: 'todoDoneSet'; day: DateKey; id: string; done: boolean }
@@ -73,6 +75,29 @@ export function applyAction(data: CheckInData, action: CheckInAction): CheckInDa
 
       const sites = [...data.sites]
       ;[sites[index], sites[destination]] = [sites[destination], sites[index]]
+      return { ...data, sites }
+    }
+    case 'siteReordered': {
+      /**
+       * 拖拽排序：把 `id` 插到 `targetId` 当前所在的位置。
+       *
+       * 和 `siteMoved`（和邻居交换）的区别：拖拽的落点是任意一张卡，
+       * 语义是「移动」而不是「交换」—— 被拖的卡插到目标位置，
+       * 中间那些卡整体让位一格。`canReorder` 是唯一守卫，
+       * 它同时挡住「同一张卡」「不存在的 id」和「跨置顶分组」三种情况，
+       * 校验逻辑只写一份，组件侧算落点高亮时也调它。
+       */
+      const { id, targetId } = action
+      if (!canReorder(data.sites, id, targetId)) return data
+
+      const from = data.sites.findIndex((site) => site.id === id)
+      const to = data.sites.findIndex((site) => site.id === targetId)
+      const sites = [...data.sites]
+      const [moved] = sites.splice(from, 1)
+
+      // `from < to` 时目标原本在被拖项的下面；把它抽走之后，目标整体上移了一格，
+      // 所以插入位置要减 1，才能让被拖项正好落在目标原先占的那一格。
+      sites.splice(from < to ? to - 1 : to, 0, moved)
       return { ...data, sites }
     }
     case 'preferencesChanged':

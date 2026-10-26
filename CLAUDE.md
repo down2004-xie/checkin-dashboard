@@ -49,7 +49,7 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `orphans.ts` | 孤儿记录（指向已删站点的 `records` 条目）的统计与清理。删除不自动发生，必须用户显式触发；只动 `records`，不碰 `targets` 快照 |
 | `daylight.ts` | 时段色板（深色 `PALETTES` + 亮色 `LIGHT_PALETTES`）+ `resolvePalette(theme, appearance)`：明暗与色相两个正交维度 |
 | `heatmap.ts` | 热力图网格 + 强度分级 + `groupByWeek` / `monthLabel` |
-| `sites.ts` | 站点筛选/排序（搜索、分类、状态、置顶优先）+ `moveNeighbor`（**按可见列表**算换位邻居） |
+| `sites.ts` | 站点筛选/排序（搜索、分类、状态、置顶优先）+ `moveNeighbor`（**按可见列表**算换位邻居）+ `canReorder`（拖拽落点是否合法） |
 | `todo.ts` | 待办创建（`createTodo`，随机 UUID） |
 | `tween.ts` | 缓动函数（`easeOutCubic`） |
 | `site-form.ts` | URL 校验 + **站点身份 id 生成**（`siteIdFromUrl`） |
@@ -82,6 +82,16 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 `moveNeighbor`（`lib/sites.ts`）按**可见列表**算邻居，`reducer` 只执行交换。
 同理，置顶与普通站之间不许互换：置顶的显示位置由置顶决定，换了屏幕上也不会动。
 
+**拖拽排序**（手动顺序下的把手）走另一条路：落点可以是任意一张可见卡，语义是「移动到目标位」
+而不是「和邻居交换」。合法性统一由 `canReorder` 判定（原地 / 不存在 / 跨置顶三组拒绝），
+reducer 的 `siteReordered` 用 splice 把被拖项插到目标位（`from < to` 时插入点要减 1）。
+组件侧算落点高亮也调同一个 `canReorder`，**校验只写一份**。
+`SiteGrid` 用 window 上的 pointermove/pointerup 驱动（把手 pointerdown 时 `setPointerCapture`，
+事件仍冒泡到 window），`elementFromPoint` 命中 `[data-site-id]` 算落点；
+落点另存一份 ref 供 pointerup 读，避免闭包拿到上一帧的 state。
+**验收必须用 CDP 真鼠标事件** —— 合成 `PointerEvent` 不触发 pointer capture，
+`npm run test:drag` 就是为此写的。
+
 `sakura.ts` 的核心约束是**确定性**：同一种子必须生成同一棵树。
 组件会因为勾选签到而重渲染，用 `Math.random()` 的话树会在用户眼皮底下换形状。
 所以这里用固定种子的 mulberry32，不返回 `Math.random()`。
@@ -99,7 +109,8 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 **工具箱是「第二个视图」，不是第二个项目。** 顶层用 `view` state 在「签到 / 工具箱」
 之间条件渲染（项目刻意无路由）。工具目录是 `data/tools.ts` 里的静态数组，
 **不进 localStorage、不升数据版本**——工具是编译期确定的目录，不是用户数据。
-加一个工具只需：`data/tools.ts` 加一行 + 写组件 + 在 `ToolboxView` 里挂上。
+加一个工具只需：`data/tools.ts` 加一行 + 写组件 + 在 `ToolboxView` 里加一条 `React.lazy` 绑定
+并在 `<Suspense>` 内挂上（工具按需加载，每个工具一个独立 chunk，主视图不预载工具箱 JS）。
 `status` 三态：`ready`（可用，进面板）/ `soon`（开发中，点了给提示）/ `link`（外链）。
 新工具若含纯逻辑，逻辑一律进 `lib/`（如 `unit-convert.ts` / `countdown.ts`）并单测；
 组件只做渲染。**临时分享箱这类要后端的工具只能 `soon`**，纯静态站实现不了。

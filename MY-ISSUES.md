@@ -430,13 +430,13 @@
 |---|---|---|---|
 | 中 | `parseBookmarks` 的 DOM 解析层无单测 | 🟦 暂时绕过 | 依赖 `DOMParser`，Vitest 默认的 node 环境没有（已确认 Node v22.17.0 下 `typeof DOMParser === 'undefined'`）。刻意不引入 jsdom，靠浏览器人工验收（样本见 `fixtures/sample-bookmarks.html`）。缓解措施是把不可测的部分圈到最小——只有这一个函数。**2026-10-12 起这条有了兜底**：`npm run test:browser` 里有一项专门在真实浏览器里跑它（`Bookmark HTML parser renders an import plan in a real browser`），不再是纯人工 |
 | 中 | 热力图强度依赖「当前站点总数」 | ✅ 已随 v5 解决 | v5 的 `targets` 快照已让 `summarizeDay` 优先读「当天的目标」，不再用当前站点总数。历史格子的深浅不会被今天增删站点改写。**注意**：历史记录若没有快照（v4 及以前），显示「目标未知」而不是推测 —— 刻意不伪造历史数据 |
-| 低 | 删站点后 records 留下孤儿记录 | ✅ 已解决（2026-10-26） | 新增 `lib/orphans.ts`（`findOrphans` / `removeOrphans`）+ `orphansCleared` action + `OrphanCleanup` 区块。**刻意不自动清理**（孤儿记录是恢复历史的锚，自动删会破坏「加回同域名接回历史」），只在有孤儿时渲染入口，点击前二次确认，只动 `records` 不碰 `targets`。浏览器 `shots/orphan-verify.mjs` 8 项守着 |
+| 低 | 删站点后 records 留下孤儿记录 | ✅ 已解决（2026-10-26） | 新增 `lib/orphans.ts`（`findOrphans` / `removeOrphans`）+ `orphansCleared` action + `OrphanCleanup` 区块。**刻意不自动清理**（孤儿记录是恢复历史的锚，自动删会破坏「加回同域名接回历史」），只在有孤儿时渲染入口，点击前二次确认，只动 `records` 不碰 `targets`。浏览器 `npm run test:orphan` 9 项守着 |
 | 低 | **v3 迁移救不回「迁移之前就已经删掉」的站点历史** | 🟦 无法解决 | 迁移只能重写**当前存在**的站点 id —— 要算出新身份得有 url，而孤儿记录里只有一个旧 id（如 `site-2`），没有任何东西记得它原本是哪个站。这部分信息在删除那一刻就永久丢失了。**现在起不会再有这个问题**（删了再加能接回），但迁移前丢的补不回来。迁移时选择保留这些孤儿而不是删掉：删用户数据得用户自己决定 |
 | 低 | 编辑站点改 url 后，id 与域名脱钩 | 🟦 暂时绕过 | `SiteForm` 编辑时保留原 id（id 是历史记录的锚，改了历史就断），所以「改 url」之后 `id !== siteIdFromUrl(url)`。后果：原来那个网址不能再作为新卡片加回来（会被判成重复）。取舍上优先保历史，这个副作用可接受 |
 | 低 | `GlassCard` 的 `href` 渲染层没有第二道防线 | 🟦 暂时绕过 | 当前取舍是「校验收敛到 `migrate.ts` 一处」（见 #8 遗留）：单一入口、好测、好讲。**代价是以后新增任何写站点的路径都必须走 `sanitizeSites`**，漏一条防线就失效。暂不加渲染层校验，避免两处标准漂移（那正是 #7 的教训） |
 | 低 | 樱花的**视觉**部分（树形、花瓣、满签爆发）没有自动化验收 | 🟦 暂时绕过 | 纯函数层（`lib/sakura.ts` 的生成逻辑）有 27 条单测守着确定性和形态指标；但「树看起来像不像树」「爆发像不像从树下涌起」只能靠人眼看。Vitest 跑在 node 环境、项目刻意不引入 jsdom，截图对比要额外引入 Playwright 和基线图管理，对当前体量不划算。本次用临时 Playwright 脚本人工验收（截图留在 `shots/`），**未纳入 CI**。留到有必要做视觉回归时再补 |
 | 低 | 移动端樱花树的压淡系数 0.26 是照截图定的 | 🟦 暂时绕过 | 见 #10。没有可量化的判据（「枝条透过卡片看得清不清」是主观判断），所以它是口味值不是计算值。改这一个数就能调，位置在 `sakura.css` 的 `max-width: 640px` 块里 |
-| 低 | 浏览器交互的验收脚本是临时的，未纳入 CI | ⚠️ 部分解决（2026-10-12） | 脚本从 `shots/`（gitignore）**转正到 `scripts/browser-check.mjs`**，有了 `npm run test:browser` 这个入口，场景从 15 项涨到 23 项，跑完自动清理进程和临时 profile。仍未进 CI：它要起服务 + 起浏览器，和「纯函数单测」是两个层次的成本，混进 `npm test` 会让它从 2 秒变分钟级。**至少不会再是一段跑完就删的临时脚本了** |
+| 低 | 浏览器交互的验收脚本是临时的，未纳入 CI | ⚠️ 部分解决（2026-10-26） | 脚本已**全部转正到 `scripts/`**（`browser-check` 23 项 + 五个专项脚本，各有 `npm run test:*` 入口），不再是跑完就删、换机即失的临时脚本。仍未进 CI：它要起服务 + 起浏览器，和「纯函数单测」是两个层次的成本，混进 `npm test` 会让它从 2 秒变分钟级。要进 CI 应单开一个 job |
 | 低 | 单测只在东八区跑过，没验过其它时区 | ⚠️ 部分解决（2026-10-13） | 见 #15。已知的时区依赖断言已改成按本地日历推导；本机是在 UTC+8、CI 在 UTC，两边都绿。但**「同一条测试换时区还成立吗」没有自动守** —— 要真守住得在 CI 里用矩阵跑 `TZ=UTC` / `TZ=Asia/Shanghai` 两遍，属于 CI 配置增强（另见红线：改 CI 配置要先问） |
 | 低 | `toDateKey` 里的 UTC 回退**在 UTC 机器上无法被测试区分** | 🟦 无法解决 | 见 #15 的学习 3。机器正好在 UTC+0 时，本地日历 ≡ UTC 日历，`toISOString` 的写法与正确写法**输出完全相同**——这是数学事实，不是测试写得不好。所以 CI（UTC）那一次跑无论如何都拦不住这个 bug，真正的防线只能是开发机的时区，或 CI 上加时区矩阵 |
 
@@ -556,3 +556,14 @@
   补验后确认行为符合设计，把「已知的不确定」变成了「已知的确定」。
   唯一的小插曲是脚本自己写错了两处预期（`today` 还没落盘就读取、`normalizeUrl` 补结尾斜杠），
   属于测试代码的问题，按规矩不进问题列表。
+- 2026-10-26 阶段 23 三项并行（站点拖拽排序 / 工具箱按需加载 / 验收脚本迁入 `scripts/`）。
+  **不产生问题编号**，但记两条值得复用的点：
+  - **拖拽验收必须用 CDP 真鼠标事件**：把手在 `pointerdown` 时 `setPointerCapture`，
+    而合成 `new PointerEvent()` 不触发 pointer capture，后续 move/up 不走真实事件流 ——
+    用它写的拖拽测试会静默地测不到东西。`scripts/drag-check.mjs` 用 `Input.dispatchMouseEvent` 分步移动。
+  - **`shots/` 被 `.gitignore` 忽略**，之前所有专项脚本只存在于本地、换机即失。
+    本轮把 toolbox/appearance/orphan/acceptance/drag 五个脚本 + backdrop 探针统一迁入 `scripts/`
+    并加 npm 入口，workspace 用 `fileURLToPath(new URL('..', import.meta.url))` 解析，
+    从此随仓库走。这条以前没意识到，是「脚本一直在本地能跑」造成的错觉。
+  验证：`tsc --noEmit` 0 错误；`vitest run` **529 用例**全过；`vite build` 成功且 15 个工具各自独立 chunk；
+  `test:browser` 23 / `test:toolbox` 20 / `test:appearance` 6 / `test:orphan` 9 / `test:acceptance` 8 / `test:drag` 4 全绿。

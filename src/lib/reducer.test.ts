@@ -411,3 +411,47 @@ describe('orphansCleared', () => {
     expect(applyAction(before, { type: 'orphansCleared' })).toBe(before)
   })
 })
+
+describe('siteReordered', () => {
+  const SITE_C: Site = { id: 'c', name: 'C', url: 'https://c' }
+  const SITE_PINNED: Site = { id: 'x', name: 'X', url: 'https://x', pinned: true }
+
+  it('向下拖：被拖项落在目标原来的位置，中间的项整体上移', () => {
+    const before = makeData({}, [SITE_A, SITE_B, SITE_C])
+    const after = applyAction(before, { type: 'siteReordered', id: 'a', targetId: 'c' })
+    // [a,b,c] → 抽走 a → [b,c] → 插到 c 原位置（1）→ [b,a,c]
+    expect(after.sites.map((site) => site.id)).toEqual(['b', 'a', 'c'])
+  })
+
+  it('向上拖：被拖项落在目标原来的位置，目标及其后面的项后移', () => {
+    const before = makeData({}, [SITE_A, SITE_B, SITE_C])
+    const after = applyAction(before, { type: 'siteReordered', id: 'c', targetId: 'a' })
+    expect(after.sites.map((site) => site.id)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('跨置顶边界 → 原样返回同一个引用（不跨组移动）', () => {
+    const before = makeData({}, [SITE_A, SITE_B, SITE_PINNED])
+    expect(applyAction(before, { type: 'siteReordered', id: 'a', targetId: 'x' })).toBe(before)
+    expect(applyAction(before, { type: 'siteReordered', id: 'x', targetId: 'a' })).toBe(before)
+  })
+
+  it('同一个 id → 原样返回同一个引用', () => {
+    const before = makeData({}, [SITE_A, SITE_B])
+    expect(applyAction(before, { type: 'siteReordered', id: 'a', targetId: 'a' })).toBe(before)
+  })
+
+  it('目标不存在 → 原样返回同一个引用', () => {
+    const before = makeData({}, [SITE_A, SITE_B])
+    expect(applyAction(before, { type: 'siteReordered', id: 'a', targetId: 'ghost' })).toBe(before)
+  })
+
+  it('只动 sites，其余字段保持同一个引用', () => {
+    const before = makeData({ '2026-10-01': ['a'] }, [SITE_A, SITE_B, SITE_C])
+    const after = applyAction(before, { type: 'siteReordered', id: 'a', targetId: 'b' })
+    expect(after.sites).not.toBe(before.sites)
+    expect(after.records).toBe(before.records)
+    expect(after.todos).toBe(before.todos)
+    expect(after.targets).toBe(before.targets)
+    expect(after.preferences).toBe(before.preferences)
+  })
+})

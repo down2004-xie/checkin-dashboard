@@ -40,6 +40,7 @@
 - [x] 阶段 21：并行三个工具 —— 长图拼接 / 图片转 PDF / Code128 条形码（多子代理并行，2026-10-25）
 - [x] 阶段 22：网页分享工具 + 临时分享箱如实标注（需后端，保持 soon）（2026-10-25）
 - [x] 阶段 16（杂项桶）：亮色主题 ✅ / 清理孤儿记录 ✅ / 真折射玻璃实测 ✅（结论：不做，见验证记录）
+- [x] 阶段 23：三项并行 —— 站点拖拽排序 / 工具箱按需加载 / 验收脚本迁入 `scripts/`（多子代理并行，2026-10-26）
 
 > 编号说明：16 是早就预留的「v4 杂项」桶，17 是临时插入的装饰功能，
 > 18 是待办，18.5 和 19 是 2026-10-12 补的。**不重编号** ——
@@ -53,11 +54,12 @@
 
 ## 当前进度
 
-**阶段 2~14、17、18、18.5、19、20~22 已全部写完，自动化验证通过。
+**阶段 2~14、17、18、18.5、19、20~23 已全部写完，自动化验证通过。
 阶段 16（杂项桶）三项已全部有结论：亮色主题 ✅、清理孤儿记录 ✅、
 真折射玻璃实测 ✅（结论：不做，理由见验证记录）。
 阶段 15 的「部署」已完成，站点已上线；「绑定二级域名」未做。
 浏览器的人工验收大部分已被 `npm run test:browser`（23 项）接管，
+另有 5 个专项脚本（工具 / 外观 / 孤儿 / 拖拽 / 原人工验收）各管一块，
 剩几条必须人手点的见「下一步」。**
 
 自动化验证结果（2026-10-02，阶段 14 结束时）：
@@ -475,6 +477,28 @@
   留下 4 条确实只能手点的（hover 图标出现、删除后百分比回落、热力图格子深浅、导出文件落盘）。
 - 本轮**没有改任何产品代码**：只是验证 + 文档。`tsc` / `vitest` 基线不变（31 文件 / 515 用例）。
 
+自动化验证结果（2026-10-26，阶段 23 三项并行之后）：
+- **站点拖拽排序**：`lib/sites.ts` 新增 `canReorder`（拒绝原地 / 不存在 / 跨置顶三组），
+  reducer 新增 `siteReordered`（把被拖项**移动到**目标位，中间项让位；`from < to` 时插入点 `to-1`）。
+  `GlassCard` 加拖拽把手（`card__handle`，仅手动顺序下渲染），`SiteGrid` 用 window 上的
+  pointermove/pointerup 驱动（指针捕获后事件仍冒泡到 window），`elementFromPoint` 算落点。
+  `onDragStart` 比规格多一个 `point` 参数 —— 4px 误触阈值需要按下坐标，否则只能读 `window.event`。
+  `overIdRef` 是必要的：pointerup 闭包里读 state 会拿到旧值（move→up 同轮到达时还没重渲染）。
+  - `sites.test.ts` 8 条 + `reducer.test.ts` 新增 `siteReordered` 6 条
+  - `scripts/drag-check.mjs`（`npm run test:drag`）**4 项全过**：手动顺序下 6 个把手 →
+    向下拖 bilibili 到 taobao 位（顺序变 `jd/bilibili/taobao/...`）→ 置顶 github →
+    普通站拖到置顶卡被拒（存储顺序一字不变）。**必须用 CDP 真鼠标事件**：合成 PointerEvent 不触发 pointer capture
+- **工具箱按需加载**：`ToolboxView` 把 15 个工具改成 `React.lazy` + 外层 `<Suspense>`，
+  fallback 是 `.toolbox__loading`（正在加载工具…）。构建产物确认 **15 个工具各自独立 chunk**
+  （最大 `ImageMosaic` 5.28 kB），主包不再预载工具箱 JS
+- **验收脚本迁入 `scripts/`**：`shots/` 整个目录被 `.gitignore` 忽略，之前的专项脚本只存在于本地、
+  换机即失。现迁入 `scripts/` 并加 npm 入口：`test:toolbox` / `test:appearance` / `test:orphan` /
+  `test:acceptance` / `test:drag` / `probe:backdrop`，workspace 统一用 `fileURLToPath(new URL('..', import.meta.url))` 解析
+- `npx tsc --noEmit` → 0 错误；`npx vitest run` → **32 文件 / 529 用例**全通过（+14 条拖拽相关）
+- `npx vite build` → 成功，产物见上
+- 全部浏览器脚本实跑：`test:browser` 23 / `test:toolbox` 20 / `test:appearance` 6 /
+  `test:orphan` 9 / `test:acceptance` 8 / `test:drag` 4 → **全绿**
+
 自动化验证结果（2026-10-13，CI 首次跑通）：
 - **CI 第一次执行 `npm test` 就红了** —— 见 MY-ISSUES #15。不是新 bug：
   `date.test.ts` 的对照断言用了 `new Date(2026, 9, 2, 0, 30)`，
@@ -535,7 +559,7 @@ Vitest 默认跑在 node 环境没有这个 API（已确认 Node v22.17.0 下 `t
 - [x] **DevTools → Application → Local Storage → 看存的 JSON，
       `version` 是 6、站点 id 是 `jd-com` 这种形态** —— 同上，脚本里直接断言了
 - [x] **删掉一张卡片，再用同样的网址加回来 → 「连续 N 天」和「累计」没归零，今天已勾的也还在**
-      —— `shots/acceptance-verify.mjs`（真删、真加，连续 3 天 / 累计 3 天 / 今日已签全部接回）
+      —— `npm run test:acceptance`（`scripts/acceptance-check.mjs`，真删、真加，连续 3 天 / 累计 3 天 / 今日已签全部接回）
 - [x] **用同一个域名的不同路径加两个站（如 `jd.com` 和 `jd.com/index.html`）→ 提示「已经有 jd.com 的卡片了」**
       —— 同上，断言了 `已经有「bilibili.com」的卡片了`
 - [x] **编辑一张卡片，只改分类不改网址 → 能保存成功**（不能被自己的域名判成重复）—— 同上
@@ -590,7 +614,7 @@ Vitest 默认跑在 node 环境没有这个 API（已确认 Node v22.17.0 下 `t
 
 1. **先跑一遍自动化确认基线是绿的**：
    `npm test && npm run build && npm run test:browser`
-   （当前应为 31 文件 / **515 用例**、构建成功、23 项浏览器场景通过。
+   （当前应为 32 文件 / **529 用例**、构建成功、23 项浏览器场景通过。
    **注意顺序**：`test:browser` 跑的是 `dist/`，必须先 build）
    想更保险再加一眼时区：`TZ=UTC npm test`
 2. **确认 CI 已经变绿** —— 见 MY-ISSUES #15：首次推送时 build job 在
@@ -603,7 +627,7 @@ Vitest 默认跑在 node 环境没有这个 API（已确认 Node v22.17.0 下 `t
    - 阶段 13：书签导入面板的 6 条（用 `fixtures/sample-bookmarks.html`，不必碰真实书签）
    - 前几轮遗留里确实只能手点的 4 条：hover 图标出现、删除后百分比回落、
      热力图格子深浅、导出文件真的落盘
-   - 阶段 14 / 点卡片跳转 / 悬停高光 / v1 老备份：**已由 `shots/acceptance-verify.mjs` 接管**
+   - 阶段 14 / 点卡片跳转 / 悬停高光 / v1 老备份：**已由 `npm run test:acceptance` 接管**
      （8 项，一条命令跑完，零新依赖）
 5. 验收没问题后绑定二级域名 —— 需要先确定「完整域名」和「DNS 在哪家服务商」，
    两处都要配：DNS 的 CNAME 记录 + 仓库里的 `public/CNAME` 文件（`public/` 目录
@@ -685,16 +709,16 @@ Vitest 默认跑在 node 环境没有这个 API（已确认 Node v22.17.0 下 `t
 | 缺口 | 计划处理阶段 | 说明 |
 |---|---|---|
 | 真·定时推送提醒 | 不做（除非加后端） | 纯静态站无法在页面关闭时唤醒 |
-| 真折射玻璃（SVG feDisplacementMap / WebGL） | ✅ 已结论（2026-10-26）：不做 | 实测 Chromium 156 **支持** `backdrop-filter: url(#f)`（条纹确实被弯折，见验证记录），但 Safari/iOS 的 `-webkit-` 变体不支持 `url()`、且逐像素位移在中低端机上会掉帧（红线 1）。维护成本高、不可自动化。维持磨砂玻璃。想重启评估先跑 `shots/backdrop-support-probe.mjs` |
+| 真折射玻璃（SVG feDisplacementMap / WebGL） | ✅ 已结论（2026-10-26）：不做 | 实测 Chromium 156 **支持** `backdrop-filter: url(#f)`（条纹确实被弯折，见验证记录），但 Safari/iOS 的 `-webkit-` 变体不支持 `url()`、且逐像素位移在中低端机上会掉帧（红线 1）。维护成本高、不可自动化。维持磨砂玻璃。想重启评估先跑 `npm run probe:backdrop` |
 | 跨设备同步 | 阶段 16 | 需接 Supabase / Firebase 免费层 |
 | 清理孤儿记录 | ✅ 已解决（2026-10-26） | `lib/orphans.ts` + `orphansCleared` action + `OrphanCleanup` 区块。平时不渲染（有孤儿才出现），点击前二次确认；只动 `records`，不碰 `targets` |
 | 热力图存「当天站点总数」 | ✅ 已解决（v5） | v5 的 `targets` 快照已经在数据层解决：`summarizeDay` 优先读当天的目标快照，增删站点不会再改写历史格子的深浅。没有快照的老记录显示「目标未知」而不推测 —— 刻意不伪造历史 |
-| 站点拖拽排序 | 阶段 16 | sites 已是数组、顺序已持久化，加拖拽不难，属于纯交互增强。现在的「前移/后移」按钮已经能调顺序（且按可见列表算邻居） |
+| 站点拖拽排序 | ✅ 已解决（2026-10-26） | 手动顺序下每张卡有拖拽把手，pointer 事件 + `elementFromPoint` 算落点，落库走 `siteReordered`（移动到目标位）。`canReorder` 挡住跨置顶分组；`npm run test:drag` 4 项守着。原来的「前移/后移」按钮保留，供键盘用户使用 |
 | IndexedDB + storage.persist() | 阶段 16 | 降低 localStorage 被清概率，当前数据量属过度设计 |
 | 环境光传感器（AmbientLightSensor） | 仅作彩蛋 | MDN 标注实验性、非 Baseline，不能作为依赖 |
 | `parseBookmarks` 的 DOM 解析层无单测 | ⚠️ 部分解决 | 依赖 `DOMParser`，node 环境没有。刻意不装 jsdom。**2026-10-12 起有兜底**：`npm run test:browser` 里有一项在真实浏览器里跑它（`Bookmark HTML parser renders an import plan in a real browser`），不再是纯人工 |
 | storage.ts 的浏览器环境单测 | ✅ 已补（2026-10-12） | v5 改动引入了 `protected persistence` 一组共 16 条：用手写的 Map 假 localStorage + `vi.stubGlobal` 覆盖了读保护、配额满、无 locks 时的陈旧写入、多标签串行、恢复前归档、快照不重复落盘 |
-| 亮色主题 | ✅ 已解决（v6，2026-10-26） | `preferences.appearance` + `LIGHT_PALETTES` + `resolvePalette`，硬编码色已换成语义变量；`shots/appearance-verify.mjs` 9 项浏览器断言守着「切过去不能白字白底」 |
+| 亮色主题 | ✅ 已解决（v6，2026-10-26） | `preferences.appearance` + `LIGHT_PALETTES` + `resolvePalette`，硬编码色已换成语义变量；`npm run test:appearance` 6 项浏览器断言守着「切过去不能白字白底」 |
 | v3 迁移前就已删除的站点，历史永久失联 | 不处理 | 迁移要算新身份得有 url，孤儿记录里只有一个旧 id，信息在删除那刻就丢了。**v3 之后不会再有这个问题**（删了再加能接回），但迁移前丢的补不回来 |
 | 迁移在真实 localStorage 上的行为 | ⚠️ 部分解决（2026-10-12） | `npm run test:browser` 的第一项就跑通了「空库打开 → 落盘 v5 → 建当天快照」，真实链路有覆盖了。**没覆盖的是「老版本真实数据升上来」** —— 单测里 v1→v5 有链式测试，但没在真浏览器里塞一份 v1 的 localStorage 跑过 |
 | 樱花的**视觉**效果无自动化验收 | 阶段 16 | `lib/sakura.ts` 的生成逻辑有 27 条单测（确定性 + 方向分散度），但「树看起来像不像树」「爆发像不像从树下涌起」只能靠人眼。项目刻意不引入 jsdom，视觉回归要额外引 Playwright + 基线图管理，对当前体量不划算。现在 `npm run test:browser` 会截 `desktop.png` / `mobile.png` 两张图，但那只是**留档**，没有基线比对 |
@@ -759,8 +783,9 @@ TZ=America/New_York npm test # 反向半球也扫一下
 **条形码**（Code128 模式表、校验和公式、START/STOP、模块长度）、
 **网页分享**（按分类分组、组顺序首次出现、模糊过滤、大小写不敏感）、
 **明暗色板**（亮色结构与深色一致、亮度确实更高、dark/light 路由、auto 按时辰选色相但明暗仍由 appearance 决定）、
-**孤儿记录**（统计去重、暂停站点不算孤儿、只动 records、清空的天删 key、无变化返回原引用、幂等）。
-共 31 个测试文件 / 515 个用例。
+**孤儿记录**（统计去重、暂停站点不算孤儿、只动 records、清空的天删 key、无变化返回原引用、幂等）、
+**拖拽排序**（`canReorder` 拒绝原地/不存在/跨置顶；`siteReordered` 的移动到目标位 splice 语义）。
+共 32 个测试文件 / 529 个用例。
 
 其中重点守着的几条：
 - `migrate.test.ts` —— v2→v3 的塌陷合并、新旧 id 交叉不互相污染、v1 链条、
@@ -851,16 +876,19 @@ npm run test:browser   # → 23 项场景 + 截图，落在 shots/regression/（
 **这套东西没纳入 CI** —— 它要起服务和浏览器，和「纯函数单测」是两个层次的成本，
 混进 `npm test` 会让它从 2 秒变成分钟级。见「已知缺口」里那条。
 
-另有四个**专项**脚本（同样零新依赖、跑完自动清理、截图默认写临时目录）：
-> ⚠️ 它们放在 `shots/` 下，而 `shots/` 整个目录被 `.gitignore` 忽略 ——
-> **只存在于本地，不会随仓库分发**。换机器/重新 clone 后需要重新生成。
-> 它们是「开发期深挖某个模块」的一次性工具；真正随仓库走的回归只有
-> `scripts/browser-check.mjs`（`npm run test:browser`）。
-- `node shots/toolbox-verify.mjs` → 21 项，逐个工具点一遍 + 移动端溢出检查
-- `node shots/appearance-verify.mjs` → 9 项，明暗切换全链路（含刷新后持久化、版本号 = 6）
-- `node shots/orphan-verify.mjs` → 9 项，孤儿记录统计 / 清理 / 落盘 / 浅色可见性 / 生效边界
-- `node shots/acceptance-verify.mjs` → 8 项，原「只能手工点」的验收：删掉再加接回历史、
-  表单三条判重、点卡片跳转、悬停高光、v1 老备份导入
+另有五个**专项**脚本，全部在 `scripts/` 下、随仓库走、零新依赖、跑完自动清理、
+截图默认写临时目录。各有 npm 入口：
+
+| 命令 | 脚本 | 覆盖 |
+|---|---|---|
+| `npm run test:toolbox` | `scripts/toolbox-check.mjs` | 20 项，逐个工具点一遍 + 移动端溢出检查 |
+| `npm run test:appearance` | `scripts/appearance-check.mjs` | 6 项，明暗切换全链路（含刷新后持久化、版本号 = 6） |
+| `npm run test:orphan` | `scripts/orphan-check.mjs` | 9 项，孤儿记录统计 / 清理 / 落盘 / 浅色可见性 / 生效边界 |
+| `npm run test:acceptance` | `scripts/acceptance-check.mjs` | 8 项，原「只能手工点」的验收：删掉再加接回历史、表单三条判重、点卡片跳转、悬停高光、v1 老备份导入 |
+| `npm run test:drag` | `scripts/drag-check.mjs` | 4 项，拖拽把手渲染 / 向下拖落位 / 跨置顶拒绝 |
+
+> ⚠️ **历史坑**：这些脚本以前散落在 `shots/` 下，而 `shots/` 整个目录被 `.gitignore` 忽略 ——
+> 换机器/重新 clone 后全丢。现已迁入 `scripts/`，随仓库分发。
 
 它们是「改到哪个大块就跑哪个」，没有并进 `browser-check.mjs`：主回归脚本只跑签到主链路，
 工具和外观的交互细节放专项脚本里，失败时定位更快。

@@ -60,3 +60,26 @@ export function moveNeighbor(visible: readonly Site[], siteId: string, direction
 
   return neighbor.id
 }
+
+/**
+ * 拖拽排序：`id` 能不能落到 `targetId` 这个位置？
+ *
+ * ## 为什么跨「置顶/普通」直接 false
+ *
+ * 和 `moveNeighbor` 同一条理由：`filterSites` 里置顶卡永远排在普通卡前面，
+ * 也就是**置顶卡的显示位置由置顶决定，不由手动顺序决定**。
+ * 把一个置顶卡拖到普通区（或反过来），存储顺序换了，屏幕上两者的相对位置却不变 ——
+ * 用户会以为拖拽失灵。所以两组之间的落点一律拒绝，让拖动只在组内生效。
+ *
+ * 判定用的是 `!!pinned`，把 `undefined` 和 `false` 视为同一组（普通站）。
+ * 返回 false 的三种情况：同一个 id（原地）、任一 id 不在可见列表里、跨组。
+ */
+export function canReorder(visible: readonly Site[], id: string, targetId: string): boolean {
+  if (id === targetId) return false
+
+  const from = visible.find((site) => site.id === id)
+  const to = visible.find((site) => site.id === targetId)
+  if (from === undefined || to === undefined) return false
+
+  return !!from.pinned === !!to.pinned
+}
