@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 
-import { encodeCode128 } from '../../lib/barcode'
+import { MAX_BARCODE_LENGTH, encodeCode128 } from '../../lib/barcode'
 
 /** 每个模块（最细的条/空）在画布上的像素宽度。3px 打印/扫码都够清晰。 */
 const MODULE_WIDTH = 3
@@ -12,10 +12,12 @@ const VERTICAL_PADDING = 12
 const QUIET_ZONE_MODULES = 10
 
 /**
- * 条形码生成工具（Code 128 / Code Set B）。
+ * 条形码生成工具（Code 128；一般内容用 Code Set B，纯数字自动用 Code Set C）。
  *
  * 分层：编码算法全在 lib/barcode.ts（有单测），这里只做
  * 「受控输入 → 取 modules → 画到 canvas → 导出 PNG」。
+ * 内容超过 MAX_BARCODE_LENGTH 时不画、不给下载，直接说明原因：
+ * 画布超出浏览器上限时 canvas 不报错、只是空白，用户看到的就是「没反应」。
  * 用 useMemo 而不是 useState 存编码结果：它是文本的派生值，
  * 存进 state 会多一个真源，容易和输入失同步。
  */
@@ -26,12 +28,15 @@ export function BarcodeTool() {
   // 输入变化即重算；结果只在本机内存，不落盘、不上传
   const result = useMemo(() => encodeCode128(text), [text])
 
+  // 超长按「实际编码的字符数」判：被剔除的中文、换行不占条码宽度
+  const tooLong = result.text.length > MAX_BARCODE_LENGTH
+  const drawable = result.modules.length > 0 && !tooLong
+
   // 把 modules 画到 canvas。依赖 result，输入一变就重绘。
   useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) return
+    if (!canvas || !drawable) return
     const modules = result.modules
-    if (modules.length === 0) return
 
     const quietZone = QUIET_ZONE_MODULES * MODULE_WIDTH
     const width = modules.length * MODULE_WIDTH + quietZone * 2
@@ -52,11 +57,11 @@ export function BarcodeTool() {
       if (!modules[i]) continue
       ctx.fillRect(quietZone + i * MODULE_WIDTH, VERTICAL_PADDING, MODULE_WIDTH, BAR_HEIGHT)
     }
-  }, [result])
+  }, [result, drawable])
 
   const download = () => {
     const canvas = canvasRef.current
-    if (!canvas || result.modules.length === 0) return
+    if (!canvas || !drawable) return
     canvas.toBlob((blob) => {
       if (!blob) return
       const url = URL.createObjectURL(blob)
@@ -64,8 +69,10 @@ export function BarcodeTool() {
       anchor.href = url
       anchor.download = 'barcode.png'
       anchor.click()
-      // 下载触发后释放，避免内存泄漏
-      URL.revokeObjectURL(url)
+      // 不能 click() 之后立刻 revoke：click 只是「发起」下载，浏览器读取 blob 是异步的，
+      // 部分浏览器（Safari、旧版 Firefox）会因为 URL 已失效而下载失败或拿到空文件。
+      // 延后一段时间再释放，既保证下载读得到，也不长期占着内存。
+      window.setTimeout(() => URL.revokeObjectURL(url), 30_000)
     }, 'image/png')
   }
 
@@ -90,10 +97,17 @@ export function BarcodeTool() {
       </label>
 
       <div className="unit-row">
-        <button type="button" className="btn btn--primary" onClick={download} disabled={isEmpty}>
+        <button type="button" className="btn btn--primary" onClick={download} disabled={!drawable}>
           下载 PNG
         </button>
       </div>
+
+      {tooLong && (
+        <p className="site-form__error" role="alert">
+          内容太长：最多 {MAX_BARCODE_LENGTH} 个字符，当前 {result.text.length} 个。
+          条码太宽扫码枪和手机都扫不全，长内容（如网址）请改用二维码。
+        </p>
+      )}
 
       {allInvalid && (
         <p className="site-form__error" role="alert">
@@ -109,7 +123,11 @@ export function BarcodeTool() {
         <p className="hint">部分字符（如换行、中文）不受支持，已被忽略；实际编码的是「{result.text}」。</p>
       )}
 
-      {!isEmpty && (
+      {drawable && result.codeSet === 'C' && (
+        <p className="hint">纯数字内容已自动使用 Code Set C（两位数字编一个符号），条码更短、更好扫。</p>
+      )}
+
+      {drawable && (
         <div className="barcode-preview">
           <canvas ref={canvasRef} role="img" aria-label={`条形码：${result.text}`} />
           <p className="barcode-preview__text">{result.text}</p>

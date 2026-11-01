@@ -1,0 +1,42 @@
+/* 文本加密工具（TextEncrypt） */
+
+.text-encrypt .filter {
+  margin-bottom: 14px;
+}
+
+.text-encrypt__field {
+  margin-bottom: 12px;
+}
+
+.text-encrypt__text {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+/* 密文是不带空格的长 Base64 串：等宽 + 任意位置折行，防止窄屏横向溢出 */
+.text-encrypt__output {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  word-break: break-all;
+}
+
+.text-encrypt__password-row {
+  margin: 0 0 12px;
+}
+
+.text-encrypt__password {
+  flex: 1;
+  min-width: 180px;
+  max-width: 320px;
+}
+
+.text-encrypt__show {
+  margin: 0 0 9px;
+}
+
+.text-encrypt__actions {
+  margin: 0 0 8px;
+  align-items: center;
+}

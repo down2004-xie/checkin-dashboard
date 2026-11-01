@@ -1,0 +1,52 @@
+/* 编码转换工具（EncodeConvert）。只放这个工具特有的布局，chip / 输入框 / 按钮复用 toolbox.css 和 features.css */
+
+.encode-convert .filter {
+  margin-bottom: 12px;
+}
+
+/* 方向 chip + 当前模式的选项放一行，窄屏自动换行 */
+.encode-convert__bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 8px 16px;
+  margin-bottom: 14px;
+}
+
+.encode-convert__bar .encode-convert__direction {
+  margin-bottom: 0;
+}
+
+.encode-convert__option {
+  margin: 0;
+}
+
+.encode-convert__shift {
+  min-width: 0;
+  width: 110px;
+}
+
+.encode-convert__field {
+  margin-bottom: 12px;
+}
+
+.encode-convert__text {
+  width: 100%;
+  min-height: 110px;
+  resize: vertical;
+  line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  /* Base64、十六进制这种不带空格的长串必须能在任意位置折行，否则 390px 宽会横向溢出 */
+  overflow-wrap: anywhere;
+  word-break: break-all;
+}
+
+.encode-convert__output {
+  color: var(--text-primary);
+}
+
+.encode-convert__actions {
+  margin: 4px 0 12px;
+  align-items: center;
+}

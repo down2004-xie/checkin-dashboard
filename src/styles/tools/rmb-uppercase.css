@@ -1,0 +1,58 @@
+/* ---------- 人民币大写 ---------- */
+
+.rmb-field {
+  max-width: 320px;
+}
+
+.rmb-input {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.rmb-examples {
+  margin: 12px 0;
+}
+
+.rmb-error {
+  margin-bottom: 12px;
+}
+
+.rmb-result {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--surface-inset);
+  border: 1px solid var(--glass-border);
+}
+
+.rmb-result__label {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 大写可能很长（玖仟玖佰玖拾玖亿…），允许在任意字间换行，390px 宽也不横向溢出 */
+.rmb-result__text {
+  font-size: 22px;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+  color: var(--accent);
+  overflow-wrap: anywhere;
+  user-select: all;
+}
+
+.rmb-result__normalized {
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.rmb-result__actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}

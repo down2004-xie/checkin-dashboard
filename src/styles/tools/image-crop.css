@@ -1,0 +1,22 @@
+/* 裁剪旋转翻转：预览从 <img> 换成 canvas（缩小版直接画在页面上，不再每次编码 data URL）。
+ * 尺寸规则照抄 toolbox.css 里 .crop-overlay img：canvas 和 img 一样是替换元素，
+ * max-width/max-height + width/height:auto 会按自身宽高比等比缩放。
+ * 用 outline 而不是 border 画边：border 会让 overlay 比画面多出 2px，
+ * 指针换算百分比坐标时（按 overlay 的外框算）会偏一点。 */
+.image-crop__preview {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  width: auto;
+  height: auto;
+  border-radius: 10px;
+  outline: 1px solid var(--glass-border);
+  background: var(--surface-inset);
+}
+
+.image-crop__notice {
+  margin: 0 0 8px;
+  font-size: 13px;
+  color: var(--warn);
+  overflow-wrap: anywhere;
+}

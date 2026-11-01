@@ -1,0 +1,17 @@
+/* 证件照处理（预览框 .id-photo-preview 是旧样式，留在 toolbox.css） */
+
+/* 检测到的背景色小色块：RGB 数字不直观，给用户看一眼「它认成了什么颜色」 */
+.id-photo-swatch {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin-left: 6px;
+  vertical-align: -1px;
+  border-radius: 3px;
+  border: 1px solid var(--glass-border);
+}
+
+/* 一排控件在窄屏会换行；滑块别被压到看不见。用专属类名：这份 CSS 加载后全局生效，不能用会误中其他工具的选择器 */
+.id-photo-tolerance {
+  min-width: 140px;
+}

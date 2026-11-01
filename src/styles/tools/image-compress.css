@@ -1,0 +1,20 @@
+/* 图片压缩：结果行里的补充提示（格式退回、画布超限缩小），独占一行 */
+.image-compress__notice {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--warn);
+  overflow-wrap: anywhere;
+}
+
+/* 压缩后反而变大时，「仍然下载压缩图」是次要选项：做成文字链接，不和「下载原图」抢主次 */
+.image-compress__secondary {
+  font-size: 13px;
+  color: var(--text-secondary);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.image-compress__secondary:hover {
+  color: var(--text-primary);
+}

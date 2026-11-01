@@ -4,8 +4,11 @@
  * 107 个符号字符（值 0–106）每个对应一段固定宽度的 1/0 位串。把表写死、
  * 按公式算校验和即可，不引入依赖，也便于在简历里讲清楚原理。
  *
- * 本文件只实现 Code Set B：可编码 ASCII 32–126（空格、数字、大小写字母、
- * 常见符号），对「每日签到 / 商品条码」这类纯文本场景足够。
+ * 实现两个字符集：
+ * - Code Set B：可编码 ASCII 32–126（空格、数字、大小写字母、常见符号），默认用它。
+ * - Code Set C：每个符号装**两位数字**（值 00–99）。纯数字内容（快递单号、会员号）
+ *   用它条码宽度几乎减半，扫码更容易。只在「整串都是数字」时启用，见 shouldUseCodeC。
+ * 混合内容（如 ABC123456）中途切换字符集能再省一点，但规则复杂、收益小，没做。
  */
 
 /**
@@ -128,12 +131,27 @@ export const CODE128_PATTERNS: readonly string[] = [
 
 /** 起始符 START B 的值。 */
 export const START_B = 104
+/** 起始符 START C 的值。 */
+export const START_C = 105
+/** 在 Code Set C 里写这个值 = 「后面切换到 Code Set B」（CODE B 字符）。 */
+export const CODE_B_IN_C = 100
 /** 终止符 STOP 的值（比普通字符多 2 个模块）。 */
 export const STOP = 106
 /** 校验和取模的基数。 */
 const MODULO = 103
 /** Code B 中字符 ASCII 码到符号值的固定偏移（值 = ASCII - 32）。 */
 const CODE_B_OFFSET = 32
+
+/**
+ * 内容长度上限（实际编码的字符数）。
+ * 为什么是 80：Code B 每字符 11 模块、每模块画 3px，80 字符的画布约 2.8k 像素宽，
+ * 已经远超一般扫码枪 / 手机摄像头一次能看清的宽度（实用的 Code 128 很少超过 40 字符）。
+ * 不设上限时贴进 2000 字符，画布宽度超出浏览器 canvas 上限，canvas 不报错、只画成空白，
+ * 下载也拿不到图 —— 用户只看到「没反应」。
+ */
+export const MAX_BARCODE_LENGTH = 80
+
+export type CodeSet = 'B' | 'C'
 
 export interface Code128Result {
   /** 逐模块的条空序列，true = bar（黑条），false = space（白空） */
@@ -142,10 +160,37 @@ export interface Code128Result {
   text: string
   /** 计算出的校验和（0–102）；空结果时为 0 */
   checksum: number
+  /** 起始字符集；空结果时为 'B' */
+  codeSet: CodeSet
+  /** 完整符号值序列（START + 数据 + 校验 + STOP），便于测试和调试；空结果时为空数组 */
+  values: number[]
 }
 
 /**
- * 把任意文本编码成 Code 128（Code Set B）模块序列。
+ * 纯数字内容是否改用 Code Set C。比的是「数据符号个数」，谁少用谁：
+ * - Code B：n 个数字 = n 个符号。
+ * - Code C：偶数位 = n/2 个；奇数位 = (n-1)/2 对 + 1 个「切到 B」+ 1 个 B 字符。
+ * 结果是：偶数位 ≥ 2 位、奇数位 ≥ 5 位时 C 更短；3 位时打平，留在 B（少一次切换更简单）。
+ */
+export function shouldUseCodeC(text: string): boolean {
+  if (!/^\d+$/.test(text)) return false
+  const n = text.length
+  return n % 2 === 0 ? n >= 2 : n >= 5
+}
+
+/** Code C 数据值：两位一组（"12" → 12）；奇数位时最后一位切回 Code B 单独编 */
+function codeCValues(digits: string): number[] {
+  const values: number[] = []
+  const pairEnd = digits.length - (digits.length % 2)
+  for (let i = 0; i < pairEnd; i += 2) values.push(Number(digits.slice(i, i + 2)))
+  if (pairEnd < digits.length) {
+    values.push(CODE_B_IN_C, digits.charCodeAt(pairEnd) - CODE_B_OFFSET)
+  }
+  return values
+}
+
+/**
+ * 把任意文本编码成 Code 128 模块序列（纯数字走 Code Set C，其余走 Code Set B）。
  *
  * 非法字符策略：**静默忽略** ASCII < 32 或 > 126 的字符（如换行、Tab、中文）。
  * 选择忽略而非抛错，是因为这个工具面向「粘贴一段文字/网址」，多行粘贴很常见，
@@ -162,24 +207,26 @@ export function encodeCode128(input: string): Code128Result {
     if (code >= 32 && code <= 126) text += input[i]
   }
   if (text.length === 0) {
-    return { modules: [], text: '', checksum: 0 }
+    return { modules: [], text: '', checksum: 0, codeSet: 'B', values: [] }
   }
 
-  // 2. Code B：每个字符的值 = ASCII - 32（范围 0–95）
-  const dataValues: number[] = []
-  for (let i = 0; i < text.length; i += 1) {
-    dataValues.push(text.charCodeAt(i) - CODE_B_OFFSET)
-  }
+  // 2. 选字符集并算数据值。Code B：值 = ASCII - 32（0–95）；Code C：两位数字一组（00–99）
+  const codeSet: CodeSet = shouldUseCodeC(text) ? 'C' : 'B'
+  const start = codeSet === 'C' ? START_C : START_B
+  const dataValues = codeSet === 'C'
+    ? codeCValues(text)
+    : Array.from(text, (ch) => ch.charCodeAt(0) - CODE_B_OFFSET)
 
-  // 3. 校验和 = (起始值 + Σ i*value_i) % 103，i 从 1 开始
-  let sum = START_B
+  // 3. 校验和 = (起始值 + Σ i*value_i) % 103，i 从 1 开始。
+  //    切换字符集的 CODE B（100）也是一个普通符号，照样参与加权
+  let sum = start
   for (let i = 0; i < dataValues.length; i += 1) {
     sum += (i + 1) * dataValues[i]
   }
   const checksum = sum % MODULO
 
-  // 4. 完整值序列：START B + 数据 + 校验和 + STOP，逐段拼成位串
-  const values = [START_B, ...dataValues, checksum, STOP]
+  // 4. 完整值序列：START + 数据 + 校验和 + STOP，逐段拼成位串
+  const values = [start, ...dataValues, checksum, STOP]
   let bitString = ''
   for (const value of values) {
     bitString += CODE128_PATTERNS[value]
@@ -191,7 +238,7 @@ export function encodeCode128(input: string): Code128Result {
     modules.push(bitString[i] === '1')
   }
 
-  return { modules, text, checksum }
+  return { modules, text, checksum, codeSet, values }
 }
 
 /**

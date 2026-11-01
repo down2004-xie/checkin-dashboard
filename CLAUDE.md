@@ -14,13 +14,31 @@
 | 层 | 选型 | 说明 |
 |---|---|---|
 | 构建 | Vite 5+ | 产物是纯静态文件 |
-| 框架 | React 18 + TypeScript | 严格模式，不用 `any` |
+| 框架 | React 19 + TypeScript | 严格模式，不用 `any` |
 | 样式 | 原生 CSS + CSS 变量 | 不引入 UI 库，不引入 Tailwind |
 | 路由 | 无 | 单视图，用条件渲染切换 |
 | 状态 | React hooks + localStorage | 不引入 Redux/Zustand |
-| 测试 | Vitest | 只测 `src/lib/` 下的纯函数 |
+| 测试 | Vitest | `src/lib/` 纯函数 + 根目录既有 App 渲染冒烟；`vitest.config.ts` 显式限定范围，不扫描 `.claude/worktrees/` 副本 |
 
 **不引入任何 UI 组件库。** 玻璃效果是这个项目的核心展示点，用别人的组件就失去了意义。
+
+**功能库的准入规则（2026-11-01 放开）。** 手写成本不现实的格式处理允许引入功能库，
+但必须同时满足：只由准入的工具 import（随工具的 lazy chunk 按需下载，主视图不预载）、
+许可证是 MIT / Apache-2.0、能说清「为什么不手写」。目前准入的四个：
+
+| 库 | 用在 | 为什么不手写 |
+|---|---|---|
+| `pdfjs-dist` | PDF 转图片、PDF 提取文字 | 渲染 PDF 要解析字体、压缩流、绘图指令，手写不现实 |
+| `pdf-lib` | PDF 合并 / 拆分 | 要读写已有 PDF 的对象结构（图片转 PDF 只需「写」，所以那个仍手写） |
+| `qrcode` | 二维码生成 | Reed-Solomon 纠错 + 8 种掩码评分，代码量大且易错 |
+| `jsqr` | 二维码识别兜底 | 浏览器自带 `BarcodeDetector` 覆盖不全（Firefox / 部分桌面端没有） |
+
+`pdfjs-dist` 的两条注意：worker 和中文字体映射（cMaps）都**本地托管**，不走 CDN
+（工具箱承诺「文件不上传、全部本地处理」）；`isEvalSupported: false`，
+并跟进安全更新（CVE-2024-4367：4.2.67 之前打开恶意 PDF 可执行任意脚本）。
+PDF.js 的 cMaps、标准字体、WASM 由 `vite.config.ts` 在开发时提供本地路径、构建时输出到
+`pdfjs/`；组件用相对当前页面的 URL 按需请求。资源只是静态附件，不进入主 JS，不在启动时预下载。
+`pdf-lib` 自 2023 年起基本停更，出问题等不到上游修复，只用它做合并/拆分这类简单操作。
 
 ## 目录约定
 
@@ -59,7 +77,11 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `unit-convert.ts` | 单位换算（长度/重量/面积/温度）。各量纲定基准单位、值先转基准再转出；温度单独走偏移公式 |
 | `countdown.ts` | 倒计时 / 纪念日的自然日差。用 UTC 天序号相减，规避夏令时导致的偏一天 |
 | `random-pick.ts` | 掷骰子 / 抛硬币 / 抽签 / 洗牌分组 / 名单解析。随机源 `random()` 可注入，便于单测确定性 |
-| `image-slice.ts` | 切图矩形计算（边界取整保证不丢像素不重叠）+ 切片文件名。不碰 Canvas |
+| `answer-book.ts` | 答案之书：长按进度和随机答案选择；避免与上一条重复，随机源可注入 |
+| `rmb.ts` | 人民币金额校验、四舍五入到分、中文大写与连续零规则 |
+| `loan.ts` | 等额本息 / 等额本金逐月还款表与对比；金额全程用整数分、末期吸收尾差 |
+| `color.ts` | HEX / RGB / HSL 解析互转、透明色合成、WCAG 对比度与可读性结论 |
+| `image-slice.ts` | 切图矩形（边界取整不丢像素不重叠）、居中正方形裁剪、等比预览尺寸、切片和 ZIP 文件名。不碰 Canvas |
 | `image-compress.ts` | 等比缩放尺寸（不放大）+ 字节格式化 + 压缩率。不碰 Canvas |
 | `image-convert.ts` | 格式表（PNG/JPEG/WebP 的能力标记）+ 扩展名替换。不碰 Canvas |
 | `image-transform.ts` | 裁剪/旋转/翻转几何：角度归一、旋转后尺寸、矩形 clamp、百分比↔像素、拖拽点→矩形。不碰 Canvas |
@@ -67,10 +89,28 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `id-photo.ts` | 证件照：尺寸表 + 颜色距离 + 背景判定/替换 + 估背景色（中位数）+ 居中裁剪。不碰 Canvas |
 | `image-stitch.ts` | 长图拼接：统一一边（纵向统一宽/横向统一高）+ 各图等比缩放的位置尺寸布局。不碰 Canvas |
 | `images-to-pdf.ts` | 手写最小 PDF 1.4（多图各一页，DCTDecode 直嵌 JPEG），xref 偏移用真实字节数算。不碰 Canvas |
-| `barcode.ts` | Code 128（Code Set B）编码：107 项标准模式表 + 校验和 + 模块序列。纯算法 |
-| `share-sites.ts` | 网页分享精选清单的分组（按分类、首次出现顺序）+ 模糊过滤。纯函数 |
+| `exif.ts` | JPEG 段 / TIFF IFD / EXIF / GPS 解析，元数据无损剥离与展示格式化；不解码图像像素 |
+| `file-accept.ts` | `accept` 规则匹配、多文件筛选和 HEIC 等浏览器不支持格式的人话提示 |
+| `canvas-limits.ts` | Canvas 边长 / 面积上限、真机探测与等比缩小计划，避免超限画布静默导出空图 |
+| `zip.ts` | 手写 ZIP store 模式 + CRC32；用于多文件一次下载和最小 DOCX 打包 |
+| `barcode.ts` | Code 128（Code Set B/C）编码：107 项标准模式表 + 校验和 + 模块序列。纯算法 |
+| `qr-code.ts` | 二维码纠错说明、颜色对比风险、识别图缩放、错误文案与仅放行 HTTP(S) 的安全链接判定；编解码交给准入库 |
+| `page-range.ts` | PDF 合并 / 拆分：保序页码范围、拆分页文件名、加载错误文案和列表相邻换位 |
+| `pdf-pages.ts` | PDF 转图片 / 提取文字共用的升序页码范围、页码压缩展示、DPI 比例与导出文件名 |
+| `pdf-text-layout.ts` | 按 PDF 文字坐标聚行、处理中英文空格和启发式分段；不伪造表格 / 多栏等版面结构 |
+| `docx.ts` | PDF 提取文字的最小 DOCX 导出：段落转 OOXML、XML 转义、复用 `zip.ts` 打包；不保留 PDF 排版，不做 OCR |
 | `text-stats.ts` | 文本统计（字符/汉字/英文词/数字串/行/段/阅读时长）。中英混排逐字符状态机分词 |
+| `diff.ts` | Myers 行级最短编辑脚本 + 有预算的行内字素差异；大文本 / 长行设上限防止卡主线程 |
+| `encoding.ts` | UTF-8、Base64（含 URL-safe）、URL、Unicode 转义和十六进制的严格编解码 |
+| `classic-cipher.ts` | 凯撒移位和国际摩斯电码编解码；明确不把中文当作国际摩斯字符 |
+| `md5.ts` | 可分块增量计算的手写 MD5，供浏览器原生 WebCrypto 不支持的 MD5 使用 |
+| `hash.ts` | MD5 / SHA-1 / SHA-256 / SHA-512 计算、进度和期望值比对；文件上限防整块读盘崩溃 |
+| `text-crypto.ts` | PBKDF2-SHA256 派生密钥 + AES-256-GCM 文本加解密，自定义带版本 / 盐 / IV 的 Base64 格式 |
+| `password.ts` | `crypto.getRandomValues` + 拒绝采样生成密码，保证每类字符出现，计算熵和强度 |
+| `share-sites.ts` | 网页分享精选清单的分组（按分类、首次出现顺序）+ 模糊过滤。纯函数 |
 | `watermark.ts` | 水印坐标计算：九宫格锚点 + 平铺点位 + 颜色转 rgba + 对比阴影色。只算几何/颜色，不碰 Canvas |
+
+**测试文件样本的编码必须和格式声明一致。** EXIF 中中文字段若模拟 UTF-8，要用 `TextEncoder` 写真实 UTF-8 字节，不可把 `charCodeAt` 塞入 `Uint8Array` 后期待中文还在。
 
 **保护模式的判据只有一条**：`droppedEntries > 0`（真的读不回来），
 **去重不算**。这个数字唯一的用途就是决定要不要只读停写，而保护模式的代价
@@ -119,9 +159,26 @@ reducer 的 `siteReordered` 用 splice 把被拖项插到目标位（`from < to`
 **不进 localStorage、不升数据版本**——工具是编译期确定的目录，不是用户数据。
 加一个工具只需：`data/tools.ts` 加一行 + 写组件 + 在 `ToolboxView` 里加一条 `React.lazy` 绑定
 并在 `<Suspense>` 内挂上（工具按需加载，每个工具一个独立 chunk，主视图不预载工具箱 JS）。
-`status` 三态：`ready`（可用，进面板）/ `soon`（开发中，点了给提示）/ `link`（外链）。
+`status` 四态：`ready`（可用，进面板）/ `soon`（开发中，点了给提示）/ `unavailable`（当前架构无法实现，点了说明原因）/ `link`（外链）。
 新工具若含纯逻辑，逻辑一律进 `lib/`（如 `unit-convert.ts` / `countdown.ts`）并单测；
-组件只做渲染。**临时分享箱这类要后端的工具只能 `soon`**，纯静态站实现不了。
+组件只做渲染。**临时分享箱这类要后端的工具标 `unavailable`**，不能暗示会在纯静态架构下实现。
+
+工具箱的几条通用约定（2026-11-01 工具箱大修时定下）：
+
+- **工具名和描述只写真实存在的功能。** 审核时查出过五处名不副实（不存在的「转盘」、
+  不存在的「本机存储」、条形码挂着二维码的 id）。描述就是对用户的承诺。
+- **选文件统一用 `components/toolbox/FilePicker.tsx`**：点击选择 + 拖放 + Ctrl+V 粘贴三合一，
+  类型过滤走 `lib/file-accept.ts`。不要在工具里各自写 `<input type="file">`。
+- **多文件下载统一打 ZIP**（`lib/zip.ts`，手写 store 模式 + CRC32）。连续 `a.click()` 会被浏览器拦截。
+- **建 canvas 之前先过 `lib/canvas-limits.ts`。** 超过浏览器上限时 canvas 不报错，
+  只会静默画成空图（长图拼接踩过）。超限要么等比缩小，要么明确告诉用户「图太大」，不能说「请重试」。
+- **大图预览用缩小版，全分辨率只在导出时画一次。** 每次调参都在主线程编码全尺寸 PNG 会卡死。
+- **导出时核对 `blob.type`。** Safari 不支持编码 WebP，`toBlob` 会静默退回 PNG，
+  文件名必须跟实际格式走。
+- **每个新工具的专属样式放 `styles/tools/<tool-id>.css`，由工具组件自己 import**，
+  随工具 chunk 按需加载。`toolbox.css` 只放工具箱外壳和多个工具共用的类。
+- **工具绑定在 `ToolboxView` 的映射表里**，每个 `ready` 工具都必须有一条；
+  `test:toolbox` 会逐个点开所有 `ready` 工具，断言面板真的渲染出来。
 
 **电子日记是「第三个视图」，和工具箱的性质正好相反：它是用户数据。** 工具是编译期目录、
 不进 localStorage；日记是用户写下的字，进 `CheckInData.diary`、进备份、升了数据版本（v7）。
@@ -315,7 +372,8 @@ v2 只能退回 `site-N`，而 N 取决于「当时哪些号没人占」——�
 - `vite.config.ts` 的 `base` 必须与仓库形态匹配：
   - 用户站（仓库名 `xxx.github.io`）→ `base: '/'`
   - 项目站（仓库名 `checkin-dashboard`）→ `base: '/checkin-dashboard/'`
-- **base 配错的表现是页面白屏 + 控制台一堆资源 404**
+- **base 配错的表现是页面一直停在启动画面（樱花一直轮流亮、不消失）+ 控制台一堆资源 404**。
+  加启动画面之前的表现是白屏；启动画面是内联在 `index.html` 里的，JS 加载失败它也照样显示
 
 ## 已知技术红线
 
@@ -334,6 +392,15 @@ v2 只能退回 `site-N`，而 N 取决于「当时哪些号没人占」——�
    它们以视口定位，不受 `.app` 的 `max-width` / `padding` 影响。
    但这意味着 `.app` 一旦被加上 `transform` / `filter` / `will-change`，
    包含块会从视口变成 `.app` —— 和红线 2 是同一个根因，同时会废掉卡片的玻璃。
+6. **启动画面写在 `index.html` 的 `#root` 里，不是 React 组件。** 它要在主 JS 下载完之前显示，
+   所以不能依赖任何打包产物：样式内联、颜色**手抄** `tokens.css` 的默认值（`--bg-1/2/3`、`--sakura-bloom/petal/core`）。
+   改了那几个默认值要同步改 `index.html`，否则挂载那一刻会跳色。
+   图形是内联 SVG 樱花（一片花瓣 `<use>` 旋转复用 5 次），**不用 GIF 等图片文件**：
+   启动画面只在网慢时可见，再加一个要下载的文件会和主 JS 抢带宽，还没下完页面就挂载了。
+   React 首次 `render()` 会清空 `#root` 原有内容，所以**不写「关闭启动画面」的代码**。
+   樱花延迟约 300 ms 才淡入（快的时候根本看不到，避免一闪），花瓣依次亮起；
+   `prefers-reduced-motion` 下花瓣不轮流亮，显示一朵静止的花。
+   `npm run test:boot` 守着这几条。
 
 ## 协作方式
 

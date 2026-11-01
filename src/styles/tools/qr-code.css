@@ -1,0 +1,98 @@
+/* 二维码生成与识别（QrCodeTool）专属样式，随工具 chunk 按需加载 */
+
+.qr-section + .qr-section {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--glass-border);
+}
+
+.qr-section__title {
+  margin: 0 0 12px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.qr-input {
+  resize: vertical;
+  min-height: 64px;
+  font-family: inherit;
+}
+
+.qr-levels {
+  margin-top: 12px;
+}
+
+.qr-chips {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+/* 颜色选择器：原生控件在各浏览器里默认很窄，统一成一个方块 */
+.qr-color {
+  min-width: 0;
+}
+
+.qr-color input[type='color'] {
+  width: 48px;
+  height: 36px;
+  padding: 2px;
+  border-radius: 8px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-inset);
+  cursor: pointer;
+}
+
+.qr-warning {
+  color: var(--warn);
+}
+
+/* 外框不加底色：二维码自带背景色（含留白），用户选什么色就显示什么色 */
+.qr-preview {
+  display: flex;
+  justify-content: center;
+  margin: 8px 0 4px;
+}
+
+.qr-preview--hidden {
+  display: none;
+}
+
+/* qrcode 库会在 canvas 上写死 style.width/height = 导出尺寸。
+   这里只缩小显示（下载仍是全分辨率），否则 2048px 的码在手机上横向溢出 */
+.qr-preview canvas {
+  width: min(100%, 320px) !important;
+  height: auto !important;
+  border-radius: 8px;
+  image-rendering: pixelated;
+}
+
+.qr-scan-preview {
+  display: block;
+  max-width: 100%;
+  max-height: 220px;
+  margin: 10px 0;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  object-fit: contain;
+}
+
+.qr-result__text {
+  margin: 8px 0 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--surface-inset);
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.6;
+  /* 长网址、长文本都要能折行，不能把面板撑出横向滚动条 */
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  max-height: 240px;
+  overflow-y: auto;
+}
+
+.qr-result__open {
+  text-decoration: none;
+}

@@ -52,6 +52,10 @@ const clickChip = async (p, text) => { await p.evaluate(`(() => { const el = [..
 const input = async (p, sel, value) => { await p.evaluate(`(() => { const el = document.querySelector(${q(sel)}); const proto = el.tagName === 'SELECT' ? HTMLSelectElement.prototype : el.tagName === 'TEXTAREA' ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value').set.call(el, ${q(value)}); el.dispatchEvent(new Event(el.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })) })()`); await delay(40) }
 const shot = async (p, name) => { const { data } = await p.send('Page.captureScreenshot', { format: 'png', captureBeyondViewport: true }); await writeFile(join(artifacts, name), Buffer.from(data, 'base64')) }
 const record = (m) => console.log(`PASS ${m}`)
+// 工具数量（和 src/data/tools.ts 保持一致；改工具清单时同步这三个数）
+const TOTAL_TOOLS = 30
+const READY_TOOLS = 29
+const IMAGE_TOOLS = 9
 
 try {
   launch(process.execPath, ['node_modules/vite/bin/vite.js', 'preview', '--host', '127.0.0.1', '--port', String(port), '--strictPort'])
@@ -67,9 +71,9 @@ try {
   // 1. 切换到工具箱
   await clickText(page, '工具箱')
   await waitFor(() => page.evaluate("!!document.querySelector('.toolbox')"), 'toolbox not shown')
-  assert.equal(await page.evaluate("document.querySelectorAll('.tool-card').length"), 16)
-  assert.equal(await page.evaluate("document.querySelectorAll('.tool-card[data-status=\"ready\"]').length"), 15)
-  record('切换到工具箱视图，16 张卡片、15 个可用工具')
+  assert.equal(await page.evaluate("document.querySelectorAll('.tool-card').length"), TOTAL_TOOLS)
+  assert.equal(await page.evaluate("document.querySelectorAll('.tool-card[data-status=\"ready\"]').length"), READY_TOOLS)
+  record(`切换到工具箱视图，${TOTAL_TOOLS} 张卡片、${READY_TOOLS} 个可用工具`)
 
   // 2. 搜索过滤
   await input(page, '.toolbox__search', '证件照')
@@ -79,10 +83,10 @@ try {
   record('搜索「证件照」只剩证件照处理一张卡')
 
   // 3. 分类筛选
-  await clickText(page, '图片 8')
-  assert.equal(await page.evaluate("document.querySelectorAll('.tool-card').length"), 8)
-  await clickText(page, '全部 16')
-  record('分类筛选「图片」显示 8 张')
+  await clickText(page, `图片 ${IMAGE_TOOLS}`)
+  assert.equal(await page.evaluate("document.querySelectorAll('.tool-card').length"), IMAGE_TOOLS)
+  await clickText(page, `全部 ${TOTAL_TOOLS}`)
+  record(`分类筛选「图片」显示 ${IMAGE_TOOLS} 张`)
 
   // 4. 单位换算：默认 1 米 = 100 厘米
   await clickToolCard(page, '单位换算')
@@ -102,7 +106,7 @@ try {
 
   // 5. 返回，进倒计时
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'back to list failed')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'back to list failed')
   await clickToolCard(page, '倒计时与纪念日')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"目标日期\"]')"), 'countdown panel not shown')
   // 目标=今天 → 就是今天
@@ -117,7 +121,7 @@ try {
 
   // 6. 随机抽签：掷骰子 / 抛硬币 / 抽签 / 分组
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '随机抽签')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"骰子个数\"]')"), 'random panel not shown')
   // 掷骰子：3 个 6 面骰
@@ -153,7 +157,7 @@ try {
 
   // 6.5 九宫格切图：造一张 300×300 图喂进文件输入，切成 3×3 → 9 张，每张 100×100
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '九宫格切图')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"选择图片\"]')"), 'slice panel not shown')
   // 用 canvas 现造一张 PNG blob，塞进文件输入（走 DataTransfer，同真实选文件）
@@ -188,7 +192,7 @@ try {
 
   // 6.6 图片压缩：造一张 400×400 噪点图，长边设 200 → 压成 200×200 且体积变小
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '图片压缩')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"选择图片\"]')"), 'compress panel not shown')
   await page.evaluate(`(async () => {
@@ -215,7 +219,7 @@ try {
 
   // 6.7 文本字数统计：输入「你好world 2026」→ 汉字2 单词1 数字串1 字符数? 实测值断言
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '文本字数统计')
   await waitFor(() => page.evaluate("!!document.querySelector('textarea[aria-label=\"待统计文本\"]')"), 'text-stats panel not shown')
   await input(page, 'textarea[aria-label="待统计文本"]', '你好world 2026')
@@ -231,7 +235,7 @@ try {
 
   // 6.8 加水印：深色图 + 白字，用「近白像素数」量化验证；平铺应显著增多
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '加水印')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"选择图片\"]')"), 'watermark panel not shown')
   await page.evaluate(`(async () => {
@@ -241,14 +245,14 @@ try {
     const dt = new DataTransfer(); dt.items.add(new File([blob], 'dark.png', { type: 'image/png' }))
     const el = document.querySelector('input[aria-label="选择图片"]'); el.files = dt.files; el.dispatchEvent(new Event('change', { bubbles: true }))
   })()`)
-  await waitFor(() => page.evaluate("(() => { const i = document.querySelector('.watermark-preview img'); return !!i && i.naturalWidth > 0 })()"), 'watermark preview not shown')
+  await waitFor(() => page.evaluate("(() => { const c = document.querySelector('.watermark-preview canvas'); return !!c && c.width > 0 })()"), 'watermark preview not shown')
   // 透明度调到 1，让白字是纯白，便于数近白像素
   await input(page, 'input[aria-label="透明度"]', '1')
   await delay(120)
   const countWhite = () => page.evaluate(`(() => {
-    const img = document.querySelector('.watermark-preview img')
-    const c = document.createElement('canvas'); c.width = img.naturalWidth; c.height = img.naturalHeight
-    const ctx = c.getContext('2d'); ctx.drawImage(img, 0, 0)
+    // 预览直接是 canvas（不再编码 data URL），直接读它的像素
+    const c = document.querySelector('.watermark-preview canvas')
+    const ctx = c.getContext('2d')
     const d = ctx.getImageData(0, 0, c.width, c.height).data
     let n = 0; for (let i = 0; i < d.length; i += 4) { if (d[i] > 200 && d[i+1] > 200 && d[i+2] > 200) n++ }
     return n
@@ -267,7 +271,7 @@ try {
 
   // 6.9 图片格式互转：PNG → JPEG，文件名变 .jpg、尺寸不变
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '图片格式互转')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"选择图片\"]')"), 'convert panel not shown')
   await page.evaluate(`(async () => {
@@ -293,7 +297,7 @@ try {
 
   // 6.10 裁剪旋转翻转：400×200 图，顺时针 90° 后应变 200×400；拖框后裁剪尺寸随之变
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '裁剪旋转翻转')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"选择图片\"]')"), 'crop panel not shown')
   await page.evaluate(`(async () => {
@@ -303,7 +307,7 @@ try {
     const dt = new DataTransfer(); dt.items.add(new File([blob], 'land.png', { type: 'image/png' }))
     const el = document.querySelector('input[aria-label="选择图片"]'); el.files = dt.files; el.dispatchEvent(new Event('change', { bubbles: true }))
   })()`)
-  await waitFor(() => page.evaluate("!!document.querySelector('.crop-overlay img')"), 'crop preview not shown')
+  await waitFor(() => page.evaluate("!!document.querySelector('.crop-overlay canvas')"), 'crop preview not shown')
   // 初始：变换后尺寸 400×200，裁剪区 = 全图 400×200
   let info = await page.evaluate("document.querySelector('.tool-panel .hint').textContent")
   assert.match(info, /变换后尺寸 400×200/)
@@ -318,7 +322,7 @@ try {
 
   // 6.11 打码马赛克：造棋盘格（细节多），框选打码后该区域颜色种类应大幅减少
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '打码与马赛克')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"选择图片\"]')"), 'mosaic panel not shown')
   await page.evaluate(`(async () => {
@@ -361,15 +365,15 @@ try {
 
   // 6.12 证件照：绿底 + 中央红方块，换白底后四角应变白、中央保持红
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '证件照处理')
-  await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"选择照片\"]')"), 'id-photo panel not shown')
+  await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"选择图片\"]')"), 'id-photo panel not shown')
   await page.evaluate(`(async () => {
     const c = document.createElement('canvas'); c.width = 300; c.height = 400
     const ctx = c.getContext('2d'); ctx.fillStyle = '#00cc00'; ctx.fillRect(0, 0, 300, 400); ctx.fillStyle = '#cc0000'; ctx.fillRect(110, 150, 80, 100)
     const blob = await new Promise((res) => c.toBlob(res, 'image/png'))
     const dt = new DataTransfer(); dt.items.add(new File([blob], 'portrait.png', { type: 'image/png' }))
-    const el = document.querySelector('input[aria-label="选择照片"]'); el.files = dt.files; el.dispatchEvent(new Event('change', { bubbles: true }))
+    const el = document.querySelector('input[aria-label="选择图片"]'); el.files = dt.files; el.dispatchEvent(new Event('change', { bubbles: true }))
   })()`)
   await waitFor(() => page.evaluate("!!document.querySelector('.id-photo-preview img')"), 'id-photo preview not shown')
   // 默认白底。检查预览图：左上角像素近白、中央偏下像素近红
@@ -393,7 +397,7 @@ try {
 
   // 6.13 长图拼接：两张 100×80 与 100×40，纵向拼接 → 画布 100×120（gap 0）
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '长图拼接')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"选择图片\"]')"), 'stitch panel not shown')
   await page.evaluate(`(async () => {
@@ -413,7 +417,7 @@ try {
 
   // 6.14 图片转 PDF：两张图 → 下载按钮出现，blob 是合法 PDF（通过 fetch 读下载链接头）
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '图片转 PDF')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"选择图片\"]')"), 'pdf panel not shown')
   await page.evaluate(`(async () => {
@@ -443,7 +447,7 @@ try {
 
   // 6.15 条形码：输入 "ABC123" 生成 canvas，宽度 > 0
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '条形码生成')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"条形码内容\"]')"), 'barcode panel not shown')
   await input(page, 'input[aria-label="条形码内容"]', 'ABC123')
@@ -456,7 +460,7 @@ try {
 
   // 6.16 网页分享：卡片列表渲染、搜索过滤、分类 chips、外链 target=_blank
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await clickToolCard(page, '有趣的网页分享')
   await waitFor(() => page.evaluate("!!document.querySelector('input[aria-label=\"搜索网站\"]')"), 'share panel not shown')
   const shareTotal = await page.evaluate("document.querySelectorAll('.share-card').length")
@@ -475,8 +479,31 @@ try {
 
   // 7. 桌面截图（工具列表）
   await clickText(page, '← 返回工具列表')
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'list')
+  await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list')
   await shot(page, 'toolbox-desktop.png')
+
+  // 6.17 兜底：逐个点开每个 ready 工具，面板必须真的渲染出来。
+  // 防的是「tools.ts 加了一行、ToolboxView 映射表忘了绑」—— 那样打开是空面板，不报任何错。
+  // 同时防占位组件（「正在接入中」）混上线。
+  const readyIds = await page.evaluate("[...document.querySelectorAll('.tool-card[data-status=\"ready\"]')].map(c => c.dataset.toolId)")
+  assert.equal(readyIds.length, READY_TOOLS)
+  for (const id of readyIds) {
+    await clickSel(page, `.tool-card[data-tool-id="${id}"]`)
+    await waitFor(() => page.evaluate("!!document.querySelector('.tool-panel') && !document.querySelector('.toolbox__loading')"), `tool ${id} panel not shown`, 30000)
+    const panel = await page.evaluate("(() => { const p = document.querySelector('.tool-panel'); return { text: p.textContent, alert: !!p.querySelector('[role=alert]'), controls: p.querySelectorAll('input, textarea, select, button').length } })()")
+    assert.ok(!panel.text.includes('正在接入中'), `tool ${id} is still a placeholder`)
+    assert.ok(!panel.text.includes('映射表里缺少'), `tool ${id} is not bound in ToolboxView`)
+    assert.ok(panel.controls > 0, `tool ${id} panel has no controls`)
+    await clickText(page, '← 返回工具列表')
+    await waitFor(() => page.evaluate(`document.querySelectorAll('.tool-card').length === ${TOTAL_TOOLS}`), 'list after ' + id)
+  }
+  record(`逐个打开全部 ${readyIds.length} 个可用工具，面板都渲染出了真实控件`)
+
+  // 6.18 「需后端」的工具：角标不写「开发中」，点击说明原因
+  assert.equal(await page.evaluate("document.querySelector('.tool-card[data-tool-id=\"temp-share\"] .tool-card__badge').textContent.trim()"), '需后端')
+  await clickSel(page, '.tool-card[data-tool-id="temp-share"]')
+  assert.ok((await page.evaluate("document.querySelector('.notice').textContent")).includes('暂不可用'), 'temp-share toast')
+  record('临时分享箱：角标「需后端」，点击说明无法实现的原因')
 
   // 7. 移动端 390 无横向溢出
   await page.send('Emulation.setDeviceMetricsOverride', { width: 390, height: 844, deviceScaleFactor: 2, mobile: true })

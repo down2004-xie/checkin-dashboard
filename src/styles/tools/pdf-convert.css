@@ -1,0 +1,25 @@
+/* 图片转 PDF（页面列表复用 toolbox.css 的 .compress-compare / .compress-item） */
+
+/* 页面模式 chips 是嵌在 unit-field 里的一行，去掉 unit-row 自带的上下外边距 */
+.pdf-convert__modes {
+  margin: 0;
+}
+
+/* 每页的标题和三个按钮分两行：三个按钮挤在小字后面，窄屏会把卡片撑出横向滚动 */
+.compress-item .pdf-convert__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+/* 覆盖 toolbox.css 里给「移除」按钮的 margin-left（那是单按钮时代的写法） */
+.compress-item .pdf-convert__actions .btn {
+  margin-left: 0;
+  padding: 2px 8px;
+  font-size: 12px;
+}
+
+.pdf-convert__summary {
+  margin: 0 0 8px;
+}

@@ -1,38 +1,75 @@
-import { lazy, Suspense, useMemo, useState, type CSSProperties } from 'react'
+import { lazy, Suspense, useMemo, useState, type ComponentType, type CSSProperties, type LazyExoticComponent } from 'react'
 
 import type { DateKey } from '../../types'
 import { TOOLS, TOOL_CATEGORIES, filterTools, searchTools, type ToolCategory, type ToolDef } from '../../data/tools'
 
-// 每个工具单独打成一个 chunk：签到看板是主视图，不该为了偶尔用一次的工具
-// 预先加载全部工具箱 JS。只有点进某个工具时才去拉它那一份。
-const UnitConverter = lazy(() => import('./UnitConverter').then((module) => ({ default: module.UnitConverter })))
-const CountdownTool = lazy(() => import('./CountdownTool').then((module) => ({ default: module.CountdownTool })))
-const RandomPick = lazy(() => import('./RandomPick').then((module) => ({ default: module.RandomPick })))
-const ImageSlice = lazy(() => import('./ImageSlice').then((module) => ({ default: module.ImageSlice })))
-const ImageCompress = lazy(() => import('./ImageCompress').then((module) => ({ default: module.ImageCompress })))
-const TextStatsTool = lazy(() => import('./TextStatsTool').then((module) => ({ default: module.TextStatsTool })))
-const ImageWatermark = lazy(() => import('./ImageWatermark').then((module) => ({ default: module.ImageWatermark })))
-const ImageConvert = lazy(() => import('./ImageConvert').then((module) => ({ default: module.ImageConvert })))
-const ImageCrop = lazy(() => import('./ImageCrop').then((module) => ({ default: module.ImageCrop })))
-const ImageMosaic = lazy(() => import('./ImageMosaic').then((module) => ({ default: module.ImageMosaic })))
-const ImageIdPhoto = lazy(() => import('./ImageIdPhoto').then((module) => ({ default: module.ImageIdPhoto })))
-const ImageStitch = lazy(() => import('./ImageStitch').then((module) => ({ default: module.ImageStitch })))
-const ImagesToPdf = lazy(() => import('./ImagesToPdf').then((module) => ({ default: module.ImagesToPdf })))
-const BarcodeTool = lazy(() => import('./BarcodeTool').then((module) => ({ default: module.BarcodeTool })))
-const WebShare = lazy(() => import('./WebShare').then((module) => ({ default: module.WebShare })))
+/** 所有工具组件收到的 props。多数工具用不到 today，忽略即可 */
+export interface ToolProps {
+  today: DateKey
+}
+
+/**
+ * 把「具名导出的组件」包成 React.lazy 需要的形状（lazy 只认 default 导出）。
+ * 每个工具单独打成一个 chunk：签到看板是主视图，不该为了偶尔用一次的工具
+ * 预先加载全部工具箱 JS。只有点进某个工具时才去拉它那一份。
+ */
+function lazyNamed<K extends string>(load: () => Promise<Record<K, ComponentType<ToolProps>>>, name: K): LazyExoticComponent<ComponentType<ToolProps>> {
+  return lazy(() => load().then((module) => ({ default: module[name] })))
+}
+
+/**
+ * 工具 id → 组件 的映射表。每个 ready 工具都必须有一条，
+ * 漏绑定的话打开是空面板（下面有兜底提示，test:toolbox 也会逐个点开所有 ready 工具检查）。
+ */
+const TOOL_COMPONENTS: Record<string, LazyExoticComponent<ComponentType<ToolProps>>> = {
+  'unit-convert': lazyNamed(() => import('./UnitConverter'), 'UnitConverter'),
+  countdown: lazyNamed(() => import('./CountdownTool'), 'CountdownTool'),
+  'random-pick': lazyNamed(() => import('./RandomPick'), 'RandomPick'),
+  'answer-book': lazyNamed(() => import('./AnswerBook'), 'AnswerBook'),
+  'rmb-uppercase': lazyNamed(() => import('./RmbUppercase'), 'RmbUppercase'),
+  'loan-calc': lazyNamed(() => import('./LoanCalculator'), 'LoanCalculator'),
+  'color-tool': lazyNamed(() => import('./ColorTool'), 'ColorTool'),
+  barcode: lazyNamed(() => import('./BarcodeTool'), 'BarcodeTool'),
+  'qr-code': lazyNamed(() => import('./QrCodeTool'), 'QrCodeTool'),
+  'image-convert': lazyNamed(() => import('./ImageConvert'), 'ImageConvert'),
+  'image-compress': lazyNamed(() => import('./ImageCompress'), 'ImageCompress'),
+  'image-crop': lazyNamed(() => import('./ImageCrop'), 'ImageCrop'),
+  'image-watermark': lazyNamed(() => import('./ImageWatermark'), 'ImageWatermark'),
+  'image-grid': lazyNamed(() => import('./ImageSlice'), 'ImageSlice'),
+  'image-stitch': lazyNamed(() => import('./ImageStitch'), 'ImageStitch'),
+  'image-mosaic': lazyNamed(() => import('./ImageMosaic'), 'ImageMosaic'),
+  'id-photo': lazyNamed(() => import('./ImageIdPhoto'), 'ImageIdPhoto'),
+  'exif-viewer': lazyNamed(() => import('./ExifViewer'), 'ExifViewer'),
+  'pdf-convert': lazyNamed(() => import('./ImagesToPdf'), 'ImagesToPdf'),
+  'pdf-to-image': lazyNamed(() => import('./PdfToImage'), 'PdfToImage'),
+  'pdf-merge-split': lazyNamed(() => import('./PdfMergeSplit'), 'PdfMergeSplit'),
+  'pdf-to-word': lazyNamed(() => import('./PdfToWord'), 'PdfToWord'),
+  'text-stats': lazyNamed(() => import('./TextStatsTool'), 'TextStatsTool'),
+  'text-diff': lazyNamed(() => import('./TextDiff'), 'TextDiff'),
+  'encode-convert': lazyNamed(() => import('./EncodeConvert'), 'EncodeConvert'),
+  'hash-calc': lazyNamed(() => import('./HashCalc'), 'HashCalc'),
+  'text-encrypt': lazyNamed(() => import('./TextEncrypt'), 'TextEncrypt'),
+  'password-gen': lazyNamed(() => import('./PasswordGen'), 'PasswordGen'),
+  'web-share': lazyNamed(() => import('./WebShare'), 'WebShare'),
+}
 
 interface ToolboxViewProps {
   today: DateKey
 }
 
+const BADGE: Record<Exclude<ToolDef['status'], 'ready'>, string> = {
+  soon: '开发中',
+  unavailable: '需后端',
+  link: '外链',
+}
 /**
  * 工具箱视图。
  *
- * 和签到看板是「同一页面的两个视图」，不是两个路由 —— 顶层用 view 切换，
- * 所以这里不需要处理 URL。工具卡片是静态数据驱动的：加工具只改 data/tools.ts。
+ * 和签到看板是「同一页面的不同视图」，不是路由 —— 顶层用 view 切换，
+ * 所以这里不需要处理 URL。工具卡片是静态数据驱动的：加工具改 data/tools.ts + 上面的映射表。
  *
- * 三种卡片状态各自的行为在 handleOpen 里集中处理：
- * ready 进面板、soon 给提示、link 新标签打开。
+ * 四种卡片状态各自的行为在 handleOpen 里集中处理：
+ * ready 进面板、soon / unavailable 给提示、link 新标签打开。
  */
 export function ToolboxView({ today }: ToolboxViewProps) {
   const [category, setCategory] = useState<ToolCategory | null>(null)
@@ -44,6 +81,8 @@ export function ToolboxView({ today }: ToolboxViewProps) {
     TOOL_CATEGORIES.find((item) => item.id === id)?.color ?? '#6ea8ff'
 
   const visible = useMemo(() => searchTools(filterTools(category), query), [category, query])
+  // chip 上的数量跟着搜索词走：搜「PDF」时「图片 0」比「图片 9」诚实
+  const matched = useMemo(() => searchTools(TOOLS, query), [query])
 
   const handleOpen = (tool: ToolDef) => {
     if (tool.status === 'ready') {
@@ -51,6 +90,8 @@ export function ToolboxView({ today }: ToolboxViewProps) {
       setToast(null)
     } else if (tool.status === 'link' && tool.link) {
       window.open(tool.link, '_blank', 'noopener,noreferrer')
+    } else if (tool.status === 'unavailable') {
+      setToast(`「${tool.name}」暂不可用：${tool.description}`)
     } else {
       setToast(`「${tool.name}」正在开发中，敬请期待`)
     }
@@ -59,6 +100,7 @@ export function ToolboxView({ today }: ToolboxViewProps) {
   // 进入某个工具的面板
   if (activeId) {
     const tool = TOOLS.find((item) => item.id === activeId)
+    const Tool = TOOL_COMPONENTS[activeId]
     return (
       <section className="toolbox" aria-label="工具箱">
         <div className="toolbox__head">
@@ -66,21 +108,9 @@ export function ToolboxView({ today }: ToolboxViewProps) {
           <h1 className="toolbox__title toolbox__title--inline">{tool?.icon} {tool?.name}</h1>
         </div>
         <Suspense fallback={<p className="hint toolbox__loading">正在加载工具…</p>}>
-          {activeId === 'unit-convert' && <UnitConverter />}
-          {activeId === 'countdown' && <CountdownTool today={today} />}
-          {activeId === 'random-pick' && <RandomPick />}
-          {activeId === 'image-grid' && <ImageSlice />}
-          {activeId === 'image-compress' && <ImageCompress />}
-          {activeId === 'text-stats' && <TextStatsTool />}
-          {activeId === 'image-watermark' && <ImageWatermark />}
-          {activeId === 'image-convert' && <ImageConvert />}
-          {activeId === 'image-crop' && <ImageCrop />}
-          {activeId === 'image-mosaic' && <ImageMosaic />}
-          {activeId === 'id-photo' && <ImageIdPhoto />}
-          {activeId === 'image-stitch' && <ImageStitch />}
-          {activeId === 'pdf-convert' && <ImagesToPdf />}
-          {activeId === 'qr-code' && <BarcodeTool />}
-          {activeId === 'web-share' && <WebShare />}
+          {Tool ? <Tool today={today} /> : (
+            <div className="tool-panel" role="alert"><p className="site-form__error">这个工具还没有接入面板（映射表里缺少「{activeId}」）</p></div>
+          )}
         </Suspense>
       </section>
     )
@@ -99,11 +129,11 @@ export function ToolboxView({ today }: ToolboxViewProps) {
 
       <div className="filter" role="group" aria-label="按分类筛选工具">
         <button type="button" className={`chip${category === null ? ' chip--active' : ''}`}
-          aria-pressed={category === null} onClick={() => setCategory(null)}>全部 {TOOLS.length}</button>
+          aria-pressed={category === null} onClick={() => setCategory(null)}>全部 {matched.length}</button>
         {TOOL_CATEGORIES.map((item) => (
           <button key={item.id} type="button" className={`chip${category === item.id ? ' chip--active' : ''}`}
             aria-pressed={category === item.id} onClick={() => setCategory(item.id)}>
-            {item.label} {TOOLS.filter((tool) => tool.category === item.id).length}
+            {item.label} {matched.filter((tool) => tool.category === item.id).length}
           </button>
         ))}
       </div>
@@ -116,15 +146,13 @@ export function ToolboxView({ today }: ToolboxViewProps) {
       ) : (
         <div className="tool-grid">
           {visible.map((tool) => (
-            <button key={tool.id} type="button" className="tool-card" data-status={tool.status}
+            <button key={tool.id} type="button" className="tool-card" data-status={tool.status} data-tool-id={tool.id}
               style={{ '--tool-color': categoryColor(tool.category) } as CSSProperties}
               onClick={() => handleOpen(tool)}>
               <span className="tool-card__icon" aria-hidden="true">{tool.icon}</span>
               <span className="tool-card__name">{tool.name}</span>
               <span className="tool-card__desc">{tool.description}</span>
-              {tool.status !== 'ready' && (
-                <span className="tool-card__badge">{tool.status === 'soon' ? '开发中' : '外链'}</span>
-              )}
+              {tool.status !== 'ready' && <span className="tool-card__badge">{BADGE[tool.status]}</span>}
             </button>
           ))}
         </div>

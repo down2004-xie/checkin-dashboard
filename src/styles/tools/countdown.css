@@ -1,0 +1,12 @@
+/* 每年纪念日：在 .countdown-result 的基础上允许换行，
+ * 第二行放「下一次是哪天 / 已经过去多少天」，窄屏下不横向溢出 */
+.countdown-anniversary {
+  flex-wrap: wrap;
+}
+
+.countdown-anniversary__detail {
+  flex-basis: 100%;
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}

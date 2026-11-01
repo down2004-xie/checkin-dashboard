@@ -1,0 +1,83 @@
+/* PDF 转图片（PdfToImage）专属样式，随工具 chunk 按需加载 */
+
+.pdf-image__file {
+  margin: 10px 0 4px;
+  color: var(--text-primary);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.pdf-image__warning {
+  margin: 8px 0;
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.pdf-image__controls {
+  display: grid;
+  grid-template-columns: minmax(180px, 1fr) minmax(120px, 160px) minmax(120px, auto);
+  align-items: end;
+  gap: 12px;
+  margin: 16px 0 8px;
+}
+
+.pdf-image__range {
+  min-width: 0;
+}
+
+.pdf-image__formats {
+  display: flex;
+  gap: 6px;
+  min-height: 38px;
+  align-items: center;
+}
+
+.pdf-image__formats .chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.pdf-image__status {
+  margin: 12px 0 0;
+  color: var(--accent);
+}
+
+.pdf-image__output {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--surface-inset);
+}
+
+.pdf-image__output .hint {
+  margin: 0 0 10px;
+}
+
+.pdf-image__download {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+  vertical-align: bottom;
+}
+
+.pdf-image__privacy {
+  margin: 16px 0 0;
+  line-height: 1.55;
+}
+
+@media (max-width: 640px) {
+  .pdf-image__controls {
+    grid-template-columns: 1fr;
+  }
+
+  .pdf-image__controls .unit-field,
+  .pdf-image__controls .site-form__input {
+    min-width: 0;
+    width: 100%;
+  }
+}

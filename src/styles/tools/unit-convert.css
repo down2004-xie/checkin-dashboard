@@ -1,0 +1,6 @@
+/* 单位换算：输入不合法时结果区改成提示文字。
+ * 复用 .unit-result 的底板，只换文字颜色和字号，界面不会因为出错而跳动高度 */
+.unit-result--error {
+  font-size: 14px;
+  color: var(--warn);
+}

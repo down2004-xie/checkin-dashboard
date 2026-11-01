@@ -1,0 +1,18 @@
+/* 加水印：预览从 <img src=dataURL> 换成直接显示的 canvas（缩小版，不编码）。
+ * 尺寸规则照抄 toolbox.css 里 .watermark-preview img：canvas 是替换元素，按自身宽高比等比缩放。 */
+.image-watermark__preview {
+  max-width: 100%;
+  max-height: 320px;
+  width: auto;
+  height: auto;
+  border-radius: 10px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-inset);
+}
+
+.image-watermark__notice {
+  margin: 0;
+  font-size: 13px;
+  color: var(--warn);
+  overflow-wrap: anywhere;
+}

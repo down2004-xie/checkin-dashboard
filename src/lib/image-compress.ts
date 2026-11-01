@@ -29,6 +29,20 @@ export function fitDimensions(width: number, height: number, maxEdge: number): D
 }
 
 /**
+ * 解析「长边最大」输入框：正整数返回数字，空 / 非数字 / 非正数返回 null。
+ *
+ * 为什么不直接 Number(x)：Number('') === 0、Number('abc') 是 NaN，
+ * 交给 fitDimensions 都会被当成「不限制」静默按原尺寸压，用户以为限了 1920 其实没限。
+ * 返回 null 让组件明确提示。小数按四舍五入取整（canvas 尺寸只能是整数）。
+ */
+export function parseMaxEdge(input: string): number | null {
+  const text = input.trim()
+  if (!/^\d+(\.\d+)?$/.test(text)) return null
+  const value = Math.round(Number(text))
+  return value >= 1 ? value : null
+}
+
+/**
  * 把字节数格式化成好读的字符串：B / KB / MB。
  * 保留一位小数，整数则省掉 .0（1 KB 而不是 1.0 KB）。
  */

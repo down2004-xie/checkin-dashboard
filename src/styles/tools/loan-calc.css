@@ -1,0 +1,85 @@
+/* ---------- 房贷计算器 ---------- */
+
+.loan-rate-note {
+  margin: -8px 0 12px;
+}
+
+/* 表格放进可横向滚动的容器：390px 宽放不下五列金额时，滚的是表格，不是整页 */
+.loan-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  margin-bottom: 14px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-inset);
+}
+
+.loan-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.loan-table th,
+.loan-table td {
+  padding: 8px 12px;
+  text-align: right;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.loan-table tr:last-child th,
+.loan-table tr:last-child td {
+  border-bottom: none;
+}
+
+.loan-table thead th {
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+.loan-table tbody td {
+  color: var(--text-primary);
+}
+
+/* 首列（项目名 / 期数）左对齐 */
+.loan-table th:first-child,
+.loan-table td:first-child {
+  text-align: left;
+}
+
+.loan-compare tbody th {
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.loan-summary {
+  margin: 0 0 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-secondary);
+}
+
+.loan-summary strong {
+  color: var(--accent);
+  font-variant-numeric: tabular-nums;
+}
+
+.loan-schedule-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.loan-methods {
+  margin-bottom: 0;
+}
+
+.loan-expand {
+  margin-bottom: 14px;
+}

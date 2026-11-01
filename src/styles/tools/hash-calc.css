@@ -1,0 +1,111 @@
+/* 哈希计算工具（HashCalc） */
+
+.hash-calc .filter {
+  margin-bottom: 14px;
+}
+
+.hash-calc__field {
+  margin-bottom: 12px;
+}
+
+.hash-calc__text {
+  width: 100%;
+  min-height: 96px;
+  resize: vertical;
+  line-height: 1.5;
+}
+
+.hash-calc__expected {
+  width: 100%;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+}
+
+.hash-calc__file {
+  margin: -6px 0 10px;
+  overflow-wrap: anywhere;
+}
+
+.hash-calc__progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.hash-calc__progress progress {
+  flex: 1;
+  accent-color: var(--accent);
+}
+
+/* 结果表：算法名 | 哈希值 | 复制。哈希值是不带空格的长串，必须允许任意位置折行，否则窄屏横向溢出 */
+.hash-calc__results {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.hash-calc__row {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: var(--surface-inset);
+  border: 1px solid var(--glass-border);
+}
+
+.hash-calc__row dd {
+  margin: 0;
+}
+
+.hash-calc__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+
+.hash-calc__value {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 13px;
+  color: var(--text-primary);
+  word-break: break-all;
+  user-select: all; /* 点一下就选中整串，复制按钮失灵时手动复制更方便 */
+}
+
+.hash-calc__row--match {
+  border-color: var(--done);
+  background: var(--done-soft);
+}
+
+.hash-calc__row--mismatch {
+  border-color: var(--warn);
+}
+
+.hash-calc__verdict {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.hash-calc__verdict--match {
+  color: var(--done);
+}
+
+.hash-calc__verdict--mismatch {
+  color: var(--warn);
+}
+
+@media (max-width: 640px) {
+  /* 窄屏：算法名和复制按钮占第一行，哈希值独占第二行 */
+  .hash-calc__row {
+    grid-template-columns: 1fr auto;
+  }
+
+  .hash-calc__value {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

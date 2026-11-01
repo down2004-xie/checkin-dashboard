@@ -6,8 +6,12 @@ import {
   centerCropRect,
   colorDistance,
   estimateBackgroundColor,
+  backgroundMask,
+  estimateBackground,
+  idPhotoFileName,
   isBackgroundPixel,
-  replaceBackground,
+  replaceConnectedBackground,
+  workingSize,
   type Rgb,
 } from './id-photo'
 
@@ -62,39 +66,161 @@ describe('isBackgroundPixel', () => {
   })
 })
 
-describe('replaceBackground', () => {
-  const mk = (pixels: Rgb[]) => {
-    const arr = new Uint8ClampedArray(pixels.length * 4)
-    pixels.forEach((p, i) => { arr[i * 4] = p[0]; arr[i * 4 + 1] = p[1]; arr[i * 4 + 2] = p[2]; arr[i * 4 + 3] = 255 })
-    return arr
-  }
+/**
+ * 用字符画造一张小图：每个字符一个像素，按调色板查 RGBA。
+ * 比手写一长串数字直观：测试一眼能看出「背景包着主体、主体里有块同色区」。
+ */
+type Rgba = [number, number, number, number]
+function picture(rows: string[], palette: Record<string, Rgba>) {
+  const height = rows.length
+  const width = rows[0].length
+  const data = new Uint8ClampedArray(width * height * 4)
+  rows.forEach((row, y) => [...row].forEach((ch, x) => data.set(palette[ch], (y * width + x) * 4)))
+  const at = (out: Uint8ClampedArray, x: number, y: number) => [...out.slice((y * width + x) * 4, (y * width + x) * 4 + 4)]
+  return { data, width, height, at }
+}
 
-  it('接近背景的像素被替换成目标色', () => {
-    const data = mk([[250, 250, 250], [10, 10, 10]])
-    const out = replaceBackground(data, [255, 255, 255], 20, [67, 142, 219])
-    // 第一个（接近白）变蓝
-    expect([out[0], out[1], out[2]]).toEqual([67, 142, 219])
-    // 第二个（深色主体）不变
-    expect([out[4], out[5], out[6]]).toEqual([10, 10, 10])
+const WHITE: Rgba = [255, 255, 255, 255]
+const DARK: Rgba = [30, 30, 30, 255]
+const BLUE: Rgb = [67, 142, 219]
+const opts = { reference: [255, 255, 255] as Rgb, tolerance: 30, target: BLUE, feather: 0 }
+
+describe('replaceConnectedBackground', () => {
+  // 白底（.）包着一个深色主体（#），主体里有一块白（o）—— 白衬衫 / 眼白
+  const portrait = picture([
+    '.......',
+    '.#####.',
+    '.#ooo#.',
+    '.#ooo#.',
+    '.#####.',
+    '.......',
+  ], { '.': WHITE, '#': DARK, o: WHITE })
+
+  it('和边缘连通的背景换成目标色', () => {
+    const out = replaceConnectedBackground(portrait.data, portrait.width, portrait.height, opts)
+    expect(portrait.at(out, 0, 0)).toEqual([...BLUE, 255])
+    expect(portrait.at(out, 6, 5)).toEqual([...BLUE, 255])
   })
 
-  it('保留透明度通道', () => {
-    const arr = new Uint8ClampedArray([250, 250, 250, 128])
-    const out = replaceBackground(arr, [255, 255, 255], 20, [0, 0, 0])
-    expect(out[3]).toBe(128)
+  it('主体内部和背景同色、但不和边缘连通的区域不被替换', () => {
+    const out = replaceConnectedBackground(portrait.data, portrait.width, portrait.height, opts)
+    for (const [x, y] of [[2, 2], [3, 2], [4, 3]]) expect(portrait.at(out, x, y)).toEqual(WHITE)
+    // 主体轮廓本身也不动
+    expect(portrait.at(out, 1, 1)).toEqual(DARK)
   })
 
-  it('不改原数组（返回副本）', () => {
-    const data = mk([[250, 250, 250]])
-    const before = data[0]
-    replaceBackground(data, [255, 255, 255], 20, [67, 142, 219])
-    expect(data[0]).toBe(before)
+  it('只贴着底边的白衬衫不被当成背景（种子不取底边和两侧下半）', () => {
+    const shirt = picture([
+      '.....',
+      '.###.',
+      '#ooo#',
+      '#ooo#',
+      'ooooo',
+    ], { '.': WHITE, '#': DARK, o: WHITE })
+    const out = replaceConnectedBackground(shirt.data, shirt.width, shirt.height, opts)
+    expect(shirt.at(out, 2, 4)).toEqual(WHITE)
+    expect(shirt.at(out, 0, 4)).toEqual(WHITE)
+    expect(shirt.at(out, 0, 0)).toEqual([...BLUE, 255])
   })
 
-  it('容差 0 时不替换', () => {
-    const data = mk([[250, 250, 250]])
-    const out = replaceBackground(data, [255, 255, 255], 0, [67, 142, 219])
-    expect(out[0]).toBe(250)
+  it('透明像素视为背景，深色头发不被换掉；输出一律不透明', () => {
+    const cutout = picture([
+      '___',
+      '_#_',
+      '___',
+    ], { _: [0, 0, 0, 0], '#': DARK })
+    // 透明背景：reference 为 null，只按透明度判
+    const out = replaceConnectedBackground(cutout.data, 3, 3, { ...opts, reference: null })
+    expect(cutout.at(out, 0, 0)).toEqual([...BLUE, 255])
+    expect(cutout.at(out, 1, 1)).toEqual(DARK)
+  })
+
+  it('半透明像素叠在目标色上', () => {
+    const edge = picture(['#'], { '#': [0, 0, 0, 128] })
+    const out = replaceConnectedBackground(edge.data, 1, 1, { ...opts, reference: null, target: [255, 255, 255] })
+    // 128/255 的黑叠在白上 ≈ 127
+    expect(edge.at(out, 0, 0)[0]).toBeGreaterThan(120)
+    expect(edge.at(out, 0, 0)[0]).toBeLessThan(135)
+    expect(edge.at(out, 0, 0)[3]).toBe(255)
+  })
+
+  it('羽化：紧挨背景的「混了白」的像素往目标色偏，远处主体不动', () => {
+    // m 是白和深色的过渡色（离白 ≈ 52，略超容差 30）
+    const soft = picture([
+      '.....',
+      '.mmm.',
+      '.m#m.',
+      '.mmm.',
+      '.....',
+    ], { '.': WHITE, m: [225, 225, 225, 255], '#': DARK })
+    const hard = replaceConnectedBackground(soft.data, 5, 5, opts)
+    const feathered = replaceConnectedBackground(soft.data, 5, 5, { ...opts, feather: 2 })
+    expect(soft.at(hard, 1, 1)).toEqual([225, 225, 225, 255])
+    const [r, g, b] = soft.at(feathered, 1, 1)
+    // 往蓝偏：红绿下降，蓝基本不动
+    expect(r).toBeLessThan(225)
+    expect(g).toBeLessThan(225)
+    expect(b).toBeGreaterThan(205)
+    // 深色主体离白很远，不在羽化带内
+    expect(soft.at(feathered, 2, 2)).toEqual(DARK)
+  })
+
+  it('不改原数组', () => {
+    const before = [...portrait.data]
+    replaceConnectedBackground(portrait.data, portrait.width, portrait.height, { ...opts, feather: 2 })
+    expect([...portrait.data]).toEqual(before)
+  })
+
+  it('容差 0 时不按颜色替换', () => {
+    const out = replaceConnectedBackground(portrait.data, portrait.width, portrait.height, { ...opts, tolerance: 0 })
+    expect(portrait.at(out, 0, 0)).toEqual(WHITE)
+  })
+})
+
+describe('backgroundMask', () => {
+  it('大面积纯色背景不爆栈（BFS 不递归）', () => {
+    const width = 1000
+    const height = 1000
+    const data = new Uint8ClampedArray(width * height * 4).fill(255)
+    const mask = backgroundMask(data, width, height, [255, 255, 255], 10)
+    expect(mask.reduce((sum, v) => sum + v, 0)).toBe(width * height)
+  })
+})
+
+describe('estimateBackground', () => {
+  it('只采上角和两侧上半：下半部的衣服色不影响结果', () => {
+    // 上半白，下半整行红（肩膀压满底边）
+    const rows = [...Array(10).fill('..........'), ...Array(10).fill('RRRRRRRRRR')]
+    const img = picture(rows, { '.': WHITE, R: [200, 0, 0, 255] })
+    expect(estimateBackground(img.data, img.width, img.height)).toEqual({ color: [255, 255, 255], transparent: false })
+  })
+
+  it('透明背景识别为透明，而不是黑色', () => {
+    const rows = Array(10).fill('__________')
+    const img = picture(rows, { _: [0, 0, 0, 0] })
+    expect(estimateBackground(img.data, img.width, img.height)).toEqual({ color: null, transparent: true })
+  })
+})
+
+describe('workingSize', () => {
+  it('大图缩到约 2 倍目标尺寸', () => {
+    expect(workingSize(3000, 4200, 295, 413)).toEqual({ width: 590, height: 826 })
+  })
+
+  it('小图不放大', () => {
+    expect(workingSize(300, 420, 295, 413)).toEqual({ width: 300, height: 420 })
+  })
+})
+
+describe('idPhotoFileName', () => {
+  const one = ID_PHOTO_SIZES[0]
+  it('扩展名跟实际 blob 类型走', () => {
+    expect(idPhotoFileName('me.heic.png', one, 'image/jpeg')).toBe('me.heic-295x413.jpg')
+    expect(idPhotoFileName('me.png', one, 'image/png')).toBe('me-295x413.png')
+  })
+
+  it('空文件名有兜底', () => {
+    expect(idPhotoFileName('', one, 'image/png')).toBe('idphoto-295x413.png')
   })
 })
 

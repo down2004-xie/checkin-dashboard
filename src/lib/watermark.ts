@@ -115,3 +115,47 @@ export function tilePositions(
   }
   return points
 }
+
+export interface BoxSize {
+  width: number
+  height: number
+}
+
+/**
+ * 一个 w×h 的矩形绕中心旋转 deg 度后的外接框（轴对齐）。
+ * 宽 = |w·cos| + |h·sin|，高 = |w·sin| + |h·cos|。
+ */
+export function rotatedBounds(width: number, height: number, deg: number): BoxSize {
+  const rad = (deg * Math.PI) / 180
+  const cos = Math.abs(Math.cos(rad))
+  const sin = Math.abs(Math.sin(rad))
+  return { width: width * cos + height * sin, height: width * sin + height * cos }
+}
+
+/**
+ * 九宫格单个水印的**中心点**（组件在这里 translate + rotate，再以中心对齐画字）。
+ *
+ * 为什么按旋转后的外接框锚定：旧实现按未旋转的文字框贴边，再绕中心转。
+ * 转 45° 后文字的两个角会伸出原来的框，贴在右下角的水印就被画布裁掉一截。
+ * 用外接框贴边，转多少度都整块留在画布内（画布放得下的前提下）。
+ */
+export function anchorCenter(
+  canvasW: number,
+  canvasH: number,
+  wmW: number,
+  wmH: number,
+  deg: number,
+  anchor: Anchor,
+  padding = 0,
+): Point {
+  const box = rotatedBounds(wmW, wmH, deg)
+  const corner = anchorPosition(canvasW, canvasH, box.width, box.height, anchor, padding)
+  return { x: corner.x + box.width / 2, y: corner.y + box.height / 2 }
+}
+
+/** 字号按图片短边的百分比算（像素，不取整：预览是缩小版，取整会让预览和导出的比例对不上） */
+export function fontSizeFromPercent(canvasW: number, canvasH: number, percent: number): number {
+  const shortSide = Math.min(canvasW, canvasH)
+  if (!Number.isFinite(percent) || percent <= 0 || shortSide <= 0) return 0
+  return (shortSide * percent) / 100
+}

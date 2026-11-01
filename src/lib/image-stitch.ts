@@ -19,6 +19,8 @@ export interface StitchInput {
 }
 
 export interface StitchPlacement {
+  /** 对应输入数组里的第几张（宽或高为 0 的图被跳过，所以不一定等于 placements 的下标） */
+  index: number
   /** 该图左上角在画布上的 x */
   x: number
   /** 该图左上角在画布上的 y */
@@ -33,6 +35,13 @@ export interface StitchLayout {
   canvasWidth: number
   canvasHeight: number
   placements: StitchPlacement[]
+  /** 被跳过的输入下标（宽或高不是有限正数，没法等比缩放） */
+  skipped: number[]
+}
+
+/** 宽高都是有限正数才能参与拼接：0 会让等比缩放除以 0 得到 NaN，整张画布尺寸跟着变 NaN */
+function isUsable(img: StitchInput): boolean {
+  return Number.isFinite(img.width) && Number.isFinite(img.height) && img.width > 0 && img.height > 0
 }
 
 /** 把 gap 规整成合法的整数间隔：负数 / 非有限值都按 0 处理。 */
@@ -54,7 +63,8 @@ function isValidMaxEdge(maxEdge: number | undefined): maxEdge is number {
  * @param gap      图之间的间隔像素（负数按 0）
  * @param maxEdge  可选，统一边的上限像素（不给则不设上限，用各图该维度的最大值）
  *
- * 空数组返回全 0 的空布局，调用方据此判断「没有可拼的图」。
+ * 宽或高不是有限正数的图被跳过（记进 skipped），其余照常拼。
+ * 没有可拼的图时返回全 0 的空布局，调用方据此判断「没有可拼的图」。
  */
 export function computeStitchLayout(
   images: StitchInput[],
@@ -62,43 +72,104 @@ export function computeStitchLayout(
   gap: number,
   maxEdge?: number,
 ): StitchLayout {
-  if (images.length === 0) {
-    return { canvasWidth: 0, canvasHeight: 0, placements: [] }
+  const usable = images.map((img, index) => ({ ...img, index })).filter(isUsable)
+  const skipped = images.map((img, index) => (isUsable(img) ? -1 : index)).filter((index) => index >= 0)
+  if (usable.length === 0) {
+    return { canvasWidth: 0, canvasHeight: 0, placements: [], skipped }
   }
 
   const g = safeGap(gap)
   const cap = isValidMaxEdge(maxEdge) ? maxEdge : Number.POSITIVE_INFINITY
 
   if (direction === 'vertical') {
-    // 统一宽度 = 所有图最大宽度，再用 maxEdge 封顶
-    const maxWidth = Math.max(...images.map((img) => img.width))
-    const targetWidth = Math.round(Math.min(maxWidth, cap))
+    // 统一宽度 = 所有图最大宽度，再用 maxEdge 封顶（至少 1px，maxEdge 填 0.3 也不能产出 0 宽画布）
+    const maxWidth = Math.max(...usable.map((img) => img.width))
+    const targetWidth = Math.max(1, Math.round(Math.min(maxWidth, cap)))
 
     const placements: StitchPlacement[] = []
     let y = 0
-    for (const img of images) {
-      // 等比缩放：缩放后高度 = 原高 * 目标宽 / 原宽
-      const height = Math.round((img.height * targetWidth) / img.width)
-      placements.push({ x: 0, y, width: targetWidth, height })
+    for (const img of usable) {
+      // 等比缩放：缩放后高度 = 原高 * 目标宽 / 原宽；极扁的图也至少留 1px
+      const height = Math.max(1, Math.round((img.height * targetWidth) / img.width))
+      placements.push({ index: img.index, x: 0, y, width: targetWidth, height })
       y += height + g
     }
     // 最后一张后面没有 gap，所以总高 = 各缩放高之和 + gap*(n-1)
     const canvasHeight = y - g
-    return { canvasWidth: targetWidth, canvasHeight, placements }
+    return { canvasWidth: targetWidth, canvasHeight, placements, skipped }
   }
 
   // 横向：统一高度 = 所有图最大高度，再用 maxEdge 封顶
-  const maxHeight = Math.max(...images.map((img) => img.height))
-  const targetHeight = Math.round(Math.min(maxHeight, cap))
+  const maxHeight = Math.max(...usable.map((img) => img.height))
+  const targetHeight = Math.max(1, Math.round(Math.min(maxHeight, cap)))
 
   const placements: StitchPlacement[] = []
   let x = 0
-  for (const img of images) {
+  for (const img of usable) {
     // 等比缩放：缩放后宽度 = 原宽 * 目标高 / 原高
-    const width = Math.round((img.width * targetHeight) / img.height)
-    placements.push({ x, y: 0, width, height: targetHeight })
+    const width = Math.max(1, Math.round((img.width * targetHeight) / img.height))
+    placements.push({ index: img.index, x, y: 0, width, height: targetHeight })
     x += width + g
   }
   const canvasWidth = x - g
-  return { canvasWidth, canvasHeight: targetHeight, placements }
+  return { canvasWidth, canvasHeight: targetHeight, placements, skipped }
+}
+
+/**
+ * 把布局整体等比缩到 canvasWidth×canvasHeight（planCanvas 给出的「浏览器画得出的尺寸」）。
+ *
+ * 为什么按「边界」缩而不是逐个缩宽高：每张图的 x、width 各自取整，累加后接缝处会出现
+ * 1px 的缝或重叠。先把每张图的左右（上下）边界乘比例再取整，宽度取边界之差，
+ * 相邻两张图共享的位置取整结果一致，接缝和原布局一样整齐。最后 clamp 到画布内，防止取整越界 1px。
+ */
+export function scaleLayout(layout: StitchLayout, canvasWidth: number, canvasHeight: number): StitchLayout {
+  if (layout.canvasWidth <= 0 || layout.canvasHeight <= 0) return layout
+  const sx = canvasWidth / layout.canvasWidth
+  const sy = canvasHeight / layout.canvasHeight
+  const placements = layout.placements.map((p) => {
+    const x = Math.min(canvasWidth, Math.round(p.x * sx))
+    const y = Math.min(canvasHeight, Math.round(p.y * sy))
+    const right = Math.min(canvasWidth, Math.round((p.x + p.width) * sx))
+    const bottom = Math.min(canvasHeight, Math.round((p.y + p.height) * sy))
+    return { index: p.index, x, y, width: Math.max(1, right - x), height: Math.max(1, bottom - y) }
+  })
+  return { canvasWidth, canvasHeight, placements, skipped: layout.skipped }
+}
+
+export type ParsedNumber = { ok: true; value: number | null } | { ok: false; message: string }
+
+/**
+ * 解析「间隔」「最大边长」输入框。留空 → value: null（由调用方决定含义）；
+ * 填了非数字、小数、负数或超上限 → 返回一句人话，不再静默当成 0 / 不设上限。
+ * 旧实现 Number('abc') 得到 NaN，safeGap 悄悄按 0 处理，用户以为设了间隔其实没有。
+ */
+export function parseStitchNumber(text: string, label: string, min: number, max: number): ParsedNumber {
+  const trimmed = text.trim()
+  if (trimmed === '') return { ok: true, value: null }
+  if (!/^\d+$/.test(trimmed)) return { ok: false, message: `「${label}」请填 ${min}~${max} 的整数` }
+  const value = Number(trimmed)
+  if (value < min || value > max) return { ok: false, message: `「${label}」请填 ${min}~${max} 的整数` }
+  return { ok: true, value }
+}
+
+/** 间隔上限：再大就不是「间隔」了；最大边长上限：canvas 单边上限 */
+export const MAX_GAP = 1000
+export const MAX_EDGE = 32767
+
+/** 把第 index 项向前（delta=-1）或向后（delta=1）挪一位；越界时原样返回副本 */
+export function moveItem<T>(items: T[], index: number, delta: number): T[] {
+  const target = index + delta
+  const next = [...items]
+  if (index < 0 || index >= items.length || target < 0 || target >= items.length) return next
+  ;[next[index], next[target]] = [next[target], next[index]]
+  return next
+}
+
+/** 间隔的底色。transparent 不填（PNG 里间隔是透明的） */
+export type StitchBackground = 'transparent' | 'white' | 'black'
+
+export function backgroundFill(bg: StitchBackground): string | null {
+  if (bg === 'white') return '#ffffff'
+  if (bg === 'black') return '#000000'
+  return null
 }

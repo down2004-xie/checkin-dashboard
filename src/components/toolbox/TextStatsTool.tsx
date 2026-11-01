@@ -14,7 +14,9 @@ export function TextStatsTool() {
   const [text, setText] = useState('')
   const stats = useMemo(() => analyzeText(text), [text])
 
+  // 卡片标签是 scripts/toolbox-check.mjs 的断言锚点（按 .stat-tile__label 文字取值），改名要同步改脚本
   const cards: { label: string; value: number }[] = [
+    { label: '字数', value: stats.total },
     { label: '字符数', value: stats.chars },
     { label: '汉字', value: stats.chinese },
     { label: '英文单词', value: stats.words },
@@ -44,7 +46,10 @@ export function TextStatsTool() {
         </div>
       </div>
 
-      <p className="hint">中文按字计、英文按词计（中英混排会分开统计）。文本只在本机处理，不会上传，也不保存。</p>
+      <p className="hint">
+        字数 = 汉字 + 英文单词 + 数字串，不含标点和 emoji。字符数按看到的字数，不含空格和换行，标点算在内。
+        段落按非空行计，一行算一段。文本只在浏览器本地处理，不会上传，也不保存。
+      </p>
     </div>
   )
 }

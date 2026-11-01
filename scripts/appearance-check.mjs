@@ -90,7 +90,7 @@ try {
 
   // 6. 工具箱在浅色下也正常（切到工具箱视图）
   await page.evaluate(`[...document.querySelectorAll('.view-switch__btn')].find(b => b.textContent.trim() === '工具箱').click()`)
-  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length === 16"), 'toolbox not shown')
+  await waitFor(() => page.evaluate("document.querySelectorAll('.tool-card').length > 0"), 'toolbox not shown')
   const toolText = await rgb('.tool-card__name', 'color')
   assert.ok(toolText && toolText.r < 80, 'toolbox text should be dark in light mode: ' + JSON.stringify(toolText))
   await shot('03-light-toolbox.png')

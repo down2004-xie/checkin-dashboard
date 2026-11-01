@@ -1,0 +1,87 @@
+/* PDF 提取文字（PdfToWord）专属样式，随工具 chunk 按需加载 */
+
+.pdf-word__ready {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin: 10px 0 4px;
+}
+
+.pdf-word__file {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
+.pdf-word__status {
+  margin: 12px 0 0;
+  color: var(--accent);
+}
+
+.pdf-word__warning {
+  margin: 12px 0 0;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--warn) 42%, transparent);
+  border-radius: 10px;
+  background: color-mix(in srgb, var(--warn) 10%, transparent);
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.pdf-word__output {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--surface-inset);
+}
+
+.pdf-word__output .hint {
+  margin: 0 0 10px;
+}
+
+.pdf-word__download {
+  display: inline-block;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-decoration: none;
+  vertical-align: bottom;
+}
+
+.pdf-word__limits {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--surface-inset);
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.pdf-word__limits strong {
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.pdf-word__limits p {
+  margin: 5px 0 0;
+}
+
+@media (max-width: 640px) {
+  .pdf-word__ready {
+    align-items: stretch;
+  }
+
+  .pdf-word__ready .btn {
+    width: 100%;
+  }
+}

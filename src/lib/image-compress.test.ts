@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest'
 
-import { compressionRatio, fitDimensions, formatBytes } from './image-compress'
+import { compressionRatio, fitDimensions, formatBytes, parseMaxEdge } from './image-compress'
+
+describe('parseMaxEdge', () => {
+  it('正整数原样返回，小数四舍五入', () => {
+    expect(parseMaxEdge('1920')).toBe(1920)
+    expect(parseMaxEdge(' 800 ')).toBe(800)
+    expect(parseMaxEdge('99.6')).toBe(100)
+  })
+
+  it('空、非数字、0、负数 → null（不再静默按原尺寸压）', () => {
+    for (const bad of ['', '   ', 'abc', '12px', '0', '-5', '0.2', '1e3']) expect(parseMaxEdge(bad), bad).toBeNull()
+  })
+})
 
 describe('fitDimensions', () => {
   it('长边超过上限时等比缩小', () => {

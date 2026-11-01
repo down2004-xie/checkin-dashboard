@@ -1,0 +1,9 @@
+/* 图片格式互转：结果行里的补充提示（格式退回、画布超限缩小）。
+ * 独占一行（flex-basis 100%），用 warn 色：这是「结果和你选的不一样」的提醒，不是报错。 */
+.image-convert__notice {
+  flex-basis: 100%;
+  margin: 0;
+  font-size: 13px;
+  color: var(--warn);
+  overflow-wrap: anywhere;
+}

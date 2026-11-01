@@ -1,6 +1,61 @@
 import { describe, expect, it } from 'vitest'
 
-import { countdownTo, daysBetween } from './countdown'
+import { countdownTo, daysBetween, nextAnniversary } from './countdown'
+
+describe('nextAnniversary', () => {
+  it('今年的纪念日还没到 → 就是今年', () => {
+    expect(nextAnniversary('2020-05-20', '2026-03-01')).toEqual({
+      // 2020-05-20 → 2026-05-20 共 2191 天（含 2020、2024 两个 2 月 29 日），今天早 80 天
+      next: '2026-05-20', daysUntil: 80, years: 6, daysSince: 2111, isToday: false,
+    })
+  })
+
+  it('今年的已经过了 → 跨年到明年', () => {
+    const result = nextAnniversary('2020-05-20', '2026-12-30')
+    expect(result?.next).toBe('2027-05-20')
+    expect(result?.years).toBe(7)
+    expect(result?.daysUntil).toBe(141)
+  })
+
+  it('年末起始日跨年：12-31 的纪念日在 1 月初看是今年年底', () => {
+    const result = nextAnniversary('2025-12-31', '2026-01-02')
+    expect(result?.next).toBe('2026-12-31')
+    expect(result?.years).toBe(1)
+  })
+
+  it('今天恰好是纪念日：daysUntil 为 0、isToday、周年数算今年这次', () => {
+    expect(nextAnniversary('2020-05-20', '2026-05-20')).toEqual({
+      next: '2026-05-20', daysUntil: 0, years: 6, daysSince: 2191, isToday: true,
+    })
+  })
+
+  it('起始日就是今天：不算第 0 周年，下一次是一年后', () => {
+    const result = nextAnniversary('2026-10-02', '2026-10-02')
+    expect(result?.next).toBe('2027-10-02')
+    expect(result?.years).toBe(1)
+    expect(result?.isToday).toBe(false)
+    expect(result?.daysSince).toBe(0)
+  })
+
+  it('2 月 29 日的纪念日在平年按 2 月 28 日算', () => {
+    const result = nextAnniversary('2024-02-29', '2026-01-10')
+    expect(result?.next).toBe('2026-02-28')
+    expect(result?.years).toBe(2)
+  })
+
+  it('2 月 29 日的纪念日在闰年还是 2 月 29 日', () => {
+    expect(nextAnniversary('2024-02-29', '2027-06-01')?.next).toBe('2028-02-29')
+  })
+
+  it('平年 2 月 28 日就是 2-29 纪念日的当天', () => {
+    expect(nextAnniversary('2024-02-29', '2025-02-28')?.isToday).toBe(true)
+  })
+
+  it('起始日在未来或非法 → null', () => {
+    expect(nextAnniversary('2027-01-01', '2026-10-02')).toBeNull()
+    expect(nextAnniversary('2026-02-30', '2026-10-02')).toBeNull()
+  })
+})
 
 describe('daysBetween', () => {
   it('同一天相差 0 天', () => {

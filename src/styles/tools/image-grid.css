@@ -1,0 +1,132 @@
+/* 九宫格切图：该工具随 lazy chunk 按需加载，样式不再堆进共享 toolbox.css。 */
+.image-grid {
+  min-width: 0;
+}
+
+.image-grid__controls {
+  align-items: flex-end;
+}
+
+.image-grid__controls .unit-field {
+  flex: 0 1 150px;
+  min-width: 110px;
+}
+
+.image-grid__square-option {
+  margin-top: -4px;
+  margin-bottom: 14px;
+}
+
+.image-grid__status {
+  margin: 8px 0 12px;
+  overflow-wrap: anywhere;
+}
+
+.image-slice-preview {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+  min-width: 0;
+  margin: 8px 0 16px;
+}
+
+/* 保留旧选择器，toolbox-check 和外部验收都按它找原图预览。 */
+.image-slice-preview img {
+  display: block;
+  width: auto;
+  max-width: 100%;
+  max-height: 320px;
+  object-fit: contain;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--surface-inset);
+}
+
+.image-grid__preview-note {
+  color: var(--text-muted);
+}
+
+.slice-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: 10px;
+  min-width: 0;
+  margin-bottom: 12px;
+}
+
+.slice-item {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0;
+  padding: 7px;
+  border: 1px solid var(--glass-border);
+  border-radius: 10px;
+  background: var(--surface-inset);
+}
+
+/* 预览图本身是缩小版；不用 aspect-ratio:1 + cover，任意行列时不能裁掉画面来假装方形。 */
+.slice-item img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 220px;
+  object-fit: contain;
+  border: 1px solid var(--glass-border);
+  border-radius: 8px;
+  background: var(--surface-inset-strong);
+}
+
+.slice-item figcaption {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.slice-item__download {
+  max-width: 100%;
+  color: var(--accent);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.slice-item__download:hover {
+  color: var(--text-primary);
+}
+
+.slice-item__size {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 640px) {
+  .image-grid__controls .unit-field {
+    flex: 1 1 120px;
+    min-width: 0;
+  }
+
+  .image-grid__controls .btn {
+    max-width: 100%;
+    white-space: normal;
+  }
+
+  .slice-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .image-slice-preview img {
+    max-height: 260px;
+  }
+}
+
+@media (max-width: 340px) {
+  .slice-grid {
+    grid-template-columns: 1fr;
+  }
+}

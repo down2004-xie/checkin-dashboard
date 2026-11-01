@@ -1,96 +1,130 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 
+import { canvasProbe, planCanvas, tooLargeMessage } from '../../lib/canvas-limits'
+import { unsupportedHint } from '../../lib/file-accept'
+import { fitDimensions } from '../../lib/image-compress'
 import {
-  clampRect,
-  fullRect,
-  normalizeRotation,
+  baseName,
+  canvasFailureMessage,
+  downscaleNotice,
+  exportFormatFor,
+  fallbackNotice,
+  joinNotices,
+  resolveOutput,
+} from '../../lib/image-convert'
+import {
+  IDENTITY_ORIENTATION,
+  applyOrientationOp,
+  orientationMatrix,
   pointsToRatio,
   ratioRectToPixels,
   rotatedSize,
+  transformCropRect,
+  type Orientation,
+  type OrientationOp,
   type RatioRect,
-  type Rotation,
 } from '../../lib/image-transform'
+import { FilePicker } from './FilePicker'
+import '../../styles/tools/image-crop.css'
+
+/** 预览 canvas 的长边上限。全分辨率只在导出时画一次 */
+const PREVIEW_EDGE = 1600
+/** JPEG / WebP 导出质量：和浏览器默认值一致，肉眼无损 */
+const EXPORT_QUALITY = 0.92
+const FULL_CROP: RatioRect = { x: 0, y: 0, width: 1, height: 1 }
+
+interface Source {
+  img: HTMLImageElement
+  name: string
+  type: string
+}
 
 /**
  * 图片裁剪 / 旋转 / 翻转工具。
  *
- * 几何计算全在 lib/image-transform.ts（有单测）。这里负责：
- * 1. 把原图按「旋转 + 翻转」渲染成一张变换后的 canvas
+ * 几何全在 lib/image-transform.ts（有单测）。这里负责：
+ * 1. 按「方向」矩阵把原图画到**缩小版**预览 canvas（长边 ≤ 1600），调参不碰全分辨率
  * 2. 在预览上拖拽画裁剪框（用百分比坐标，和显示尺寸解耦）
- * 3. 导出时按裁剪框从变换后的 canvas 取像素 → toBlob
+ * 3. 导出时用同一个矩阵 + 裁剪框偏移，把原图直接画进裁剪尺寸的 canvas，全分辨率只画这一次
+ *
+ * 旋转 / 翻转时裁剪框跟着图一起变（transformCropRect），而不是重置成整图：
+ * 用户框好的区域转个方向还在原处，不用重画。
  *
  * 裁剪交互刻意做成「拖拽重画一个新框」，而不是给旧框加 8 个手柄：
  * 对「裁一张图」这个场景，重画比精细调手柄简单得多，也够用。
  */
 export function ImageCrop() {
-  const [image, setImage] = useState<HTMLImageElement | null>(null)
-  const [fileName, setFileName] = useState('')
-  const [rotation, setRotation] = useState<Rotation>(0)
-  const [flipH, setFlipH] = useState(false)
-  const [flipV, setFlipV] = useState(false)
-  const [crop, setCrop] = useState<RatioRect>({ x: 0, y: 0, width: 1, height: 1 })
-  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [source, setSource] = useState<Source | null>(null)
+  const [orientation, setOrientation] = useState<Orientation>(IDENTITY_ORIENTATION)
+  const [crop, setCrop] = useState<RatioRect>(FULL_CROP)
   const [error, setError] = useState<string | null>(null)
-  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null)
-  const objectUrlRef = useRef<string | null>(null)
+  const [notice, setNotice] = useState<string | null>(null)
+  const [working, setWorking] = useState(false)
+  // 拖拽起点 + 按下前的框：pointercancel（来电、系统手势抢走指针）时恢复原框
+  const [drag, setDrag] = useState<{ x: number; y: number; before: RatioRect } | null>(null)
   const overlayRef = useRef<HTMLDivElement>(null)
-  // 变换后的 canvas 缓存，导出时直接用，避免重复渲染
-  const transformedRef = useRef<HTMLCanvasElement | null>(null)
+  const previewRef = useRef<HTMLCanvasElement>(null)
+  const sourceUrlRef = useRef<string | null>(null)
+  const downloadUrlRef = useRef<string | null>(null)
+  const loadSeq = useRef(0)
 
-  useEffect(() => () => { if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current) }, [])
-
-  // 把原图按旋转 + 翻转画到 canvas
-  const renderTransformed = useCallback((img: HTMLImageElement, rot: Rotation, fh: boolean, fv: boolean) => {
-    const size = rotatedSize({ width: img.naturalWidth, height: img.naturalHeight }, rot)
-    const canvas = document.createElement('canvas')
-    canvas.width = size.width
-    canvas.height = size.height
-    const ctx = canvas.getContext('2d')
-    if (!ctx) return null
-    ctx.save()
-    ctx.translate(canvas.width / 2, canvas.height / 2)
-    ctx.rotate((rot * Math.PI) / 180)
-    ctx.scale(fh ? -1 : 1, fv ? -1 : 1)
-    ctx.drawImage(img, -img.naturalWidth / 2, -img.naturalHeight / 2)
-    ctx.restore()
-    return canvas
+  useEffect(() => () => {
+    loadSeq.current += 1
+    if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current)
+    if (downloadUrlRef.current) URL.revokeObjectURL(downloadUrlRef.current)
   }, [])
 
-  // 图片或变换参数变化 → 重渲染预览
+  const naturalSize = useMemo(
+    () => (source ? { width: source.img.naturalWidth, height: source.img.naturalHeight } : { width: 0, height: 0 }),
+    [source],
+  )
+  const transformedSize = useMemo(() => rotatedSize(naturalSize, orientation.rotation), [naturalSize, orientation.rotation])
+
+  // 图片或方向变化 → 重画缩小版预览。和导出用同一个矩阵函数，预览和成品不会对不上
   useEffect(() => {
-    if (!image) return
-    const canvas = renderTransformed(image, rotation, flipH, flipV)
-    if (!canvas) return
-    transformedRef.current = canvas
-    setPreviewUrl(canvas.toDataURL('image/png'))
-  }, [image, rotation, flipH, flipV, renderTransformed])
+    const canvas = previewRef.current
+    if (!source || !canvas) return
+    const preview = fitDimensions(transformedSize.width, transformedSize.height, PREVIEW_EDGE)
+    canvas.width = preview.width
+    canvas.height = preview.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) { setError(canvasFailureMessage(preview, 'context')); return }
+    const m = orientationMatrix(naturalSize, orientation, preview.width / transformedSize.width)
+    ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f)
+    ctx.drawImage(source.img, 0, 0)
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+  }, [source, orientation, naturalSize, transformedSize])
 
   const handleFile = (file: File) => {
+    const seq = ++loadSeq.current
     setError(null)
-    setCrop({ x: 0, y: 0, width: 1, height: 1 })
-    setRotation(0)
-    setFlipH(false)
-    setFlipV(false)
-    if (!file.type.startsWith('image/')) { setError('请选择图片文件'); return }
-    if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current)
+    setNotice(null)
+    setCrop(FULL_CROP)
+    setOrientation(IDENTITY_ORIENTATION)
+    setDrag(null)
+    // 先清旧图：新图加载失败时界面不能还停在上一张、按钮还能点
+    setSource(null)
+    if (sourceUrlRef.current) URL.revokeObjectURL(sourceUrlRef.current)
     const url = URL.createObjectURL(file)
-    objectUrlRef.current = url
+    sourceUrlRef.current = url
     const img = new Image()
-    img.onload = () => { setImage(img); setFileName(file.name) }
-    img.onerror = () => setError('图片加载失败，请换一张试试')
+    img.onload = () => {
+      if (seq !== loadSeq.current) return // 晚到的旧图：用户已经换了新图
+      setSource({ img, name: file.name, type: file.type })
+    }
+    img.onerror = () => {
+      if (seq !== loadSeq.current) return
+      setError(unsupportedHint(file))
+    }
     img.src = url
   }
 
-  // 裁剪框的显示尺寸（相对变换后图的像素）
-  const transformedSize = useMemo(() => {
-    if (!image) return { width: 0, height: 0 }
-    return rotatedSize({ width: image.naturalWidth, height: image.naturalHeight }, rotation)
-  }, [image, rotation])
+  const cropPixels = useMemo(() => ratioRectToPixels(crop, transformedSize), [crop, transformedSize])
 
-  const cropPixels = useMemo(
-    () => ratioRectToPixels(crop, transformedSize),
-    [crop, transformedSize],
-  )
+  const apply = (op: OrientationOp) => {
+    setOrientation((current) => applyOrientationOp(current, op))
+    setCrop((current) => transformCropRect(current, op))
+  }
 
   // 从指针事件算出相对 overlay 的百分比坐标
   const toRatio = (event: React.PointerEvent) => {
@@ -105,63 +139,92 @@ export function ImageCrop() {
 
   const onPointerDown = (event: React.PointerEvent) => {
     const p = toRatio(event)
-    setDragStart(p)
+    setDrag({ ...p, before: crop })
     setCrop({ x: p.x, y: p.y, width: 0, height: 0 })
-    ;(event.target as HTMLElement).setPointerCapture?.(event.pointerId)
+    event.currentTarget.setPointerCapture?.(event.pointerId)
   }
 
   const onPointerMove = (event: React.PointerEvent) => {
-    if (!dragStart) return
+    if (!drag) return
     const p = toRatio(event)
-    setCrop(pointsToRatio(dragStart.x, dragStart.y, p.x, p.y))
+    setCrop(pointsToRatio(drag.x, drag.y, p.x, p.y))
   }
 
   const onPointerUp = () => {
-    setDragStart(null)
+    if (!drag) return
+    setDrag(null)
     // 拖出来的框太小（<1% 边长）视为误触，重置为全图
-    setCrop((current) => (current.width < 0.01 || current.height < 0.01 ? { x: 0, y: 0, width: 1, height: 1 } : current))
+    setCrop((current) => (current.width < 0.01 || current.height < 0.01 ? FULL_CROP : current))
   }
 
-  const exportCrop = () => {
-    const transformed = transformedRef.current
-    if (!transformed) { setError('请先选择图片'); return }
-    const rect = clampRect(ratioRectToPixels(crop, { width: transformed.width, height: transformed.height }), { width: transformed.width, height: transformed.height })
-    const out = document.createElement('canvas')
-    out.width = rect.width
-    out.height = rect.height
-    const ctx = out.getContext('2d')
-    if (!ctx) { setError('当前浏览器不支持 Canvas'); return }
-    ctx.drawImage(transformed, rect.x, rect.y, rect.width, rect.height, 0, 0, rect.width, rect.height)
-    out.toBlob((blob) => {
-      if (!blob) { setError('导出失败，请重试'); return }
-      const url = URL.createObjectURL(blob)
-      const anchor = document.createElement('a')
-      anchor.href = url
-      anchor.download = `${fileName.replace(/\.[^./\\]+$/, '') || 'cropped'}-cropped.png`
-      anchor.click()
-      window.setTimeout(() => URL.revokeObjectURL(url), 1000)
-    }, 'image/png')
+  // 指针被系统收走（来电、手势、触屏转滚动）：放弃这次拖拽，恢复按下前的框
+  const onPointerCancel = () => {
+    if (!drag) return
+    setCrop(drag.before)
+    setDrag(null)
+  }
+
+  const download = (blob: Blob, name: string) => {
+    if (downloadUrlRef.current) URL.revokeObjectURL(downloadUrlRef.current)
+    const url = URL.createObjectURL(blob)
+    downloadUrlRef.current = url
+    const anchor = document.createElement('a')
+    anchor.href = url
+    anchor.download = name
+    anchor.click()
+  }
+
+  const exportCrop = async () => {
+    if (!source) { setError('请先选择图片'); return }
+    const rect = ratioRectToPixels(crop, transformedSize)
+    const wanted = { width: rect.width, height: rect.height }
+    const plan = planCanvas(wanted, canvasProbe)
+    if (!plan) { setError(tooLargeMessage(wanted)); return }
+    const { size, scale } = plan
+    const canvas = document.createElement('canvas')
+    canvas.width = size.width
+    canvas.height = size.height
+    const ctx = canvas.getContext('2d')
+    if (!ctx) { setError(canvasFailureMessage(size, 'context')); return }
+    const format = exportFormatFor(source.type)
+    if (!format.supportsAlpha) {
+      ctx.fillStyle = '#ffffff'
+      ctx.fillRect(0, 0, size.width, size.height)
+    }
+    // 原图整张画进去，偏移掉裁剪框左上角：画布外的部分自然被裁掉，不用先画全尺寸中间图
+    const m = orientationMatrix(naturalSize, orientation, scale, { x: rect.x, y: rect.y })
+    ctx.setTransform(m.a, m.b, m.c, m.d, m.e, m.f)
+    ctx.drawImage(source.img, 0, 0)
+    const seq = loadSeq.current
+    setWorking(true)
+    const blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, format.mime, EXPORT_QUALITY))
+    canvas.width = 0
+    canvas.height = 0
+    setWorking(false)
+    if (seq !== loadSeq.current) return
+    if (!blob) { setError(canvasFailureMessage(size, 'encode')); return }
+    const output = resolveOutput(format.mime, blob.type)
+    setError(null)
+    setNotice(joinNotices(output.fellBack ? fallbackNotice(format.mime, output.format) : null, downscaleNotice(wanted, size)))
+    download(blob, `${baseName(source.name, 'image')}-cropped.${output.format.ext}`)
   }
 
   return (
     <div className="tool-panel">
-      <label className="unit-field image-slice-file">
-        <span className="unit-field__label">选择图片</span>
-        <input type="file" accept="image/*" className="site-form__input" aria-label="选择图片"
-          onChange={(event) => { const file = event.target.files?.[0]; if (file) handleFile(file); event.target.value = '' }} />
-      </label>
+      <FilePicker accept="image/*" label="选择图片" onFiles={(files) => handleFile(files[0])} onReject={setError} />
 
       <div className="unit-row">
-        <button type="button" className="btn" onClick={() => setRotation((r) => normalizeRotation(r + 90))} disabled={!image}>↻ 顺时针 90°</button>
-        <button type="button" className={`btn${flipH ? ' btn--primary' : ''}`} onClick={() => setFlipH((v) => !v)} disabled={!image} aria-pressed={flipH}>⇋ 水平翻转</button>
-        <button type="button" className={`btn${flipV ? ' btn--primary' : ''}`} onClick={() => setFlipV((v) => !v)} disabled={!image} aria-pressed={flipV}>⇅ 垂直翻转</button>
-        <button type="button" className="btn" onClick={() => setCrop(fullRect({ width: 1, height: 1 }) as RatioRect)} disabled={!image}>重置裁剪框</button>
-        <button type="button" className="btn btn--primary" onClick={exportCrop} disabled={!image}>裁剪并下载</button>
+        <button type="button" className="btn" onClick={() => apply('rotate')} disabled={!source}>↻ 顺时针 90°</button>
+        <button type="button" className="btn" onClick={() => apply('flipH')} disabled={!source}>⇋ 水平翻转</button>
+        <button type="button" className="btn" onClick={() => apply('flipV')} disabled={!source}>⇅ 垂直翻转</button>
+        <button type="button" className="btn" onClick={() => setCrop(FULL_CROP)} disabled={!source}>重置裁剪框</button>
+        <button type="button" className="btn btn--primary" onClick={() => void exportCrop()} disabled={!source || working}>{working ? '导出中…' : '裁剪并下载'}</button>
       </div>
 
       {error && <p className="site-form__error" role="alert">{error}</p>}
+      {notice && <p className="image-crop__notice" role="status">{notice}</p>}
 
-      {previewUrl && (
+      {source && (
         <div className="crop-stage">
           <div
             className="crop-overlay"
@@ -169,8 +232,9 @@ export function ImageCrop() {
             onPointerDown={onPointerDown}
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
+            onPointerCancel={onPointerCancel}
           >
-            <img src={previewUrl} alt="待裁剪预览" draggable={false} />
+            <canvas ref={previewRef} className="image-crop__preview" role="img" aria-label="待裁剪预览" />
             <div className="crop-selection" style={{
               left: `${crop.x * 100}%`,
               top: `${crop.y * 100}%`,
@@ -181,13 +245,13 @@ export function ImageCrop() {
         </div>
       )}
 
-      {image && (
+      {source && (
         <p className="hint">
           变换后尺寸 {transformedSize.width}×{transformedSize.height} px ·
           裁剪区域 {cropPixels.width}×{cropPixels.height} px
         </p>
       )}
-      <p className="hint">在图片上按住拖动可画裁剪框（从任意方向拖均可），松手确定；框太小会自动重置为整图。图片只在本机处理，不会上传。</p>
+      <p className="hint">在图片上按住拖动可画裁剪框（从任意方向拖均可），松手确定；框太小会自动重置为整图。旋转、翻转时裁剪框跟着图一起变。导出格式跟随原图（JPEG 仍是 JPEG，PNG 仍是 PNG）。图片只在本机处理，不会上传。</p>
     </div>
   )
 }

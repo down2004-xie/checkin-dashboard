@@ -1,0 +1,128 @@
+/* ---------- 答案之书 ---------- */
+
+.answer-book {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  text-align: center;
+}
+
+.answer-book__intro {
+  margin: 0;
+}
+
+/* perspective 放在舞台上，翻页的 rotateY 才有纵深感。
+   舞台和卡片都不挂 backdrop-filter，所以这里的 transform 不会触发 backdrop root 陷阱（CLAUDE.md 红线 2） */
+.answer-book__stage {
+  width: 100%;
+  max-width: 360px;
+  perspective: 900px;
+}
+
+.answer-book__cover,
+.answer-book__page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  box-sizing: border-box;
+  min-height: 150px;
+  padding: 24px 20px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+}
+
+.answer-book__cover {
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.answer-book__cover-title {
+  font-size: 22px;
+  font-weight: 650;
+  letter-spacing: 0.2em;
+}
+
+.answer-book__cover-sub {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+
+/* 翻书：以左边为书脊，从侧立（-90°）转到平摊 */
+.answer-book__page {
+  background: var(--surface-inset);
+  transform-origin: left center;
+  animation: answer-book-flip 0.6s ease-out both;
+}
+
+.answer-book__answer {
+  font-size: 20px;
+  line-height: 1.6;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+@keyframes answer-book-flip {
+  from {
+    transform: rotateY(-90deg);
+    opacity: 0;
+  }
+
+  60% {
+    opacity: 1;
+  }
+
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* 按住类交互：禁止选中文字、禁止 iOS 长按弹菜单、禁止触摸手势（否则滑一下就触发 pointercancel） */
+.answer-book__button {
+  min-width: 170px;
+  padding: 12px 22px;
+  font-size: 15px;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+  touch-action: none;
+}
+
+.answer-book__button--holding {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
+}
+
+.answer-book__progress {
+  width: 100%;
+  max-width: 240px;
+  height: 4px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-inset-strong);
+  overflow: hidden;
+}
+
+.answer-book__progress-bar {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+
+/* 提示行占住高度：提示出现/消失时下面的内容不跳 */
+.answer-book__notice {
+  min-height: 1.7em;
+  margin: 0;
+}
+
+.answer-book__direct {
+  font-size: 12px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .answer-book__page {
+    animation: none;
+  }
+}

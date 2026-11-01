@@ -5,9 +5,100 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#0b1020" />
     <title>签到看板</title>
+    <style>
+      /* 启动画面：主 JS 下载完之前唯一能显示的东西（见 CLAUDE.md 红线 6）。
+       * 这里拿不到 tokens.css 的变量，颜色是手抄的默认值
+       * （--bg-1/2/3、--sakura-bloom/petal/core），改那边要同步改这里。
+       * 不用写关闭逻辑：React 首次 render 会清空 #root。 */
+      .boot-splash {
+        position: fixed;
+        inset: 0;
+        display: grid;
+        place-items: center;
+        background: radial-gradient(120% 90% at 50% 0%, #131a33 0%, #0b1020 55%, #1b1430 100%);
+        color: rgba(255, 255, 255, 0.62);
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC',
+          'Microsoft YaHei', 'Hiragino Sans GB', sans-serif;
+      }
+
+      /* 背景立刻铺上，内容延迟 300 ms 才淡入：加载快时用户根本看不到樱花 */
+      .boot-splash__content {
+        display: grid;
+        justify-items: center;
+        gap: 14px;
+        animation: boot-splash-fade 0.4s ease 0.3s both;
+      }
+
+      .boot-splash__flower {
+        width: 64px;
+        height: 64px;
+        filter: drop-shadow(0 0 10px rgba(255, 158, 196, 0.35));
+      }
+
+      /* 五片花瓣依次亮起：同一个动画，每片晚 0.3 s，光就绕着花转一圈。
+       * 暗态写在关键帧里而不是常驻样式：减少动效时动画一停，花瓣自然是全亮的静态花 */
+      .boot-splash__petals use {
+        animation: boot-splash-glow 1.5s ease-in-out infinite both;
+      }
+      .boot-splash__petals use:nth-of-type(2) { animation-delay: 0.3s; }
+      .boot-splash__petals use:nth-of-type(3) { animation-delay: 0.6s; }
+      .boot-splash__petals use:nth-of-type(4) { animation-delay: 0.9s; }
+      .boot-splash__petals use:nth-of-type(5) { animation-delay: 1.2s; }
+
+      .boot-splash__title {
+        margin: 0;
+        font-size: 15px;
+        letter-spacing: 0.2em;
+      }
+
+      @keyframes boot-splash-fade {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+
+      @keyframes boot-splash-glow {
+        0%, 60%, 100% { opacity: 0.28; }
+        20% { opacity: 1; }
+      }
+
+      /* 减少动效：花瓣不轮流亮，显示一朵静止的花 */
+      @media (prefers-reduced-motion: reduce) {
+        .boot-splash__petals use {
+          animation: none;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div class="boot-splash" role="status">
+        <div class="boot-splash__content">
+          <svg class="boot-splash__flower" viewBox="-50 -50 100 100" aria-hidden="true">
+            <defs>
+              <linearGradient id="boot-splash-petal-grad" gradientUnits="userSpaceOnUse" x1="0" y1="-6" x2="0" y2="-42">
+                <stop offset="0" stop-color="#ff9ec4" />
+                <stop offset="0.55" stop-color="#ffb7d5" />
+                <stop offset="1" stop-color="#fff1f6" />
+              </linearGradient>
+              <!-- 一片花瓣：根部在中心，尖端朝上，顶上那个 V 形缺口是樱花的辨识特征 -->
+              <path id="boot-splash-petal" fill="url(#boot-splash-petal-grad)"
+                d="M0 -6 C-15 -17 -15 -36 -6 -43 L0 -37 L6 -43 C15 -36 15 -17 0 -6 Z" />
+            </defs>
+            <!-- 同一片花瓣旋转 0/72/144/216/288 度，复用 5 次 -->
+            <g class="boot-splash__petals">
+              <use href="#boot-splash-petal" />
+              <use href="#boot-splash-petal" transform="rotate(72)" />
+              <use href="#boot-splash-petal" transform="rotate(144)" />
+              <use href="#boot-splash-petal" transform="rotate(216)" />
+              <use href="#boot-splash-petal" transform="rotate(288)" />
+            </g>
+            <circle r="7" fill="#ff9ec4" />
+            <circle r="3" fill="#fff1f6" opacity="0.85" />
+          </svg>
+          <p class="boot-splash__title">签到看板 · 加载中…</p>
+        </div>
+      </div>
+    </div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

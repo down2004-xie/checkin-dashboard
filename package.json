@@ -17,13 +17,19 @@
     "test:drag": "node scripts/drag-check.mjs",
     "test:open": "node scripts/open-pending-check.mjs",
     "test:diary": "node scripts/diary-check.mjs",
+    "test:boot": "node scripts/boot-splash-check.mjs",
     "probe:backdrop": "node scripts/backdrop-probe.mjs"
   },
   "dependencies": {
+    "jsqr": "^1.4.0",
+    "pdf-lib": "^1.17.1",
+    "pdfjs-dist": "^6.4.299",
+    "qrcode": "^1.5.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",

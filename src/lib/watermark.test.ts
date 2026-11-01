@@ -1,6 +1,105 @@
 import { describe, expect, it } from 'vitest'
 
-import { anchorPosition, hexToRgba, shadowColorFor, tilePositions } from './watermark'
+import {
+  anchorCenter,
+  anchorPosition,
+  fontSizeFromPercent,
+  hexToRgba,
+  rotatedBounds,
+  shadowColorFor,
+  tilePositions,
+  type Anchor,
+} from './watermark'
+
+/** 宽 w、高 h 的矩形以 center 为中心转 deg 度后的四个角 */
+function rotatedCorners(center: { x: number; y: number }, w: number, h: number, deg: number) {
+  const rad = (deg * Math.PI) / 180
+  return [[-w / 2, -h / 2], [w / 2, -h / 2], [w / 2, h / 2], [-w / 2, h / 2]].map(([dx, dy]) => ({
+    x: center.x + dx * Math.cos(rad) - dy * Math.sin(rad),
+    y: center.y + dx * Math.sin(rad) + dy * Math.cos(rad),
+  }))
+}
+
+const ALL_ANCHORS: Anchor[] = [
+  'top-left', 'top-center', 'top-right', 'middle-left', 'center', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right',
+]
+
+describe('rotatedBounds', () => {
+  it('0° 不变、90° 宽高互换', () => {
+    expect(rotatedBounds(100, 20, 0)).toEqual({ width: 100, height: 20 })
+    const r = rotatedBounds(100, 20, 90)
+    expect(r.width).toBeCloseTo(20, 10)
+    expect(r.height).toBeCloseTo(100, 10)
+  })
+
+  it('45°：宽高都是 (w + h)·√2/2；负角度与正角度相同', () => {
+    const r = rotatedBounds(100, 20, 45)
+    expect(r.width).toBeCloseTo(120 * Math.SQRT1_2, 10)
+    expect(r.height).toBeCloseTo(120 * Math.SQRT1_2, 10)
+    expect(rotatedBounds(100, 20, -45)).toEqual(r)
+  })
+})
+
+describe('anchorCenter（按旋转后的外接框锚定）', () => {
+  const W = 400
+  const H = 300
+  const wmW = 160
+  const wmH = 30
+
+  it('45° 右下锚点：水印四个角都不越出画布', () => {
+    const center = anchorCenter(W, H, wmW, wmH, 45, 'bottom-right', 10)
+    for (const p of rotatedCorners(center, wmW, wmH, 45)) {
+      expect(p.x).toBeLessThanOrEqual(W - 10 + 1e-9)
+      expect(p.y).toBeLessThanOrEqual(H - 10 + 1e-9)
+      expect(p.x).toBeGreaterThanOrEqual(0)
+      expect(p.y).toBeGreaterThanOrEqual(0)
+    }
+  })
+
+  it('反验：按未旋转的框锚定（旧实现）在 45° 时会越出画布', () => {
+    const corner = anchorPosition(W, H, wmW, wmH, 'bottom-right', 10)
+    const oldCenter = { x: corner.x + wmW / 2, y: corner.y + wmH / 2 }
+    const maxY = Math.max(...rotatedCorners(oldCenter, wmW, wmH, 45).map((p) => p.y))
+    expect(maxY).toBeGreaterThan(H)
+  })
+
+  it('九个锚点 × 多个角度：画布放得下时都不越界', () => {
+    for (const deg of [-90, -45, -30, 0, 15, 45, 60, 90]) {
+      for (const anchor of ALL_ANCHORS) {
+        const center = anchorCenter(W, H, wmW, wmH, deg, anchor, 10)
+        for (const p of rotatedCorners(center, wmW, wmH, deg)) {
+          expect(p.x, `${anchor} ${deg}°`).toBeGreaterThanOrEqual(-1e-9)
+          expect(p.y, `${anchor} ${deg}°`).toBeGreaterThanOrEqual(-1e-9)
+          expect(p.x, `${anchor} ${deg}°`).toBeLessThanOrEqual(W + 1e-9)
+          expect(p.y, `${anchor} ${deg}°`).toBeLessThanOrEqual(H + 1e-9)
+        }
+      }
+    }
+  })
+
+  it('0° 时与旧的 anchorPosition 一致（不旋转的用户看不出变化）', () => {
+    const center = anchorCenter(W, H, wmW, wmH, 0, 'bottom-right', 10)
+    expect(center).toEqual({ x: W - wmW - 10 + wmW / 2, y: H - wmH - 10 + wmH / 2 })
+  })
+})
+
+describe('fontSizeFromPercent', () => {
+  it('按短边算：4000×3000 的 5% = 150px', () => {
+    expect(fontSizeFromPercent(4000, 3000, 5)).toBe(150)
+    expect(fontSizeFromPercent(3000, 4000, 5)).toBe(150)
+  })
+
+  it('预览缩小后同比例缩小（不取整）', () => {
+    expect(fontSizeFromPercent(1600, 1200, 5)).toBe(60)
+    expect(fontSizeFromPercent(333, 1000, 3)).toBeCloseTo(9.99, 10)
+  })
+
+  it('非法输入返回 0', () => {
+    expect(fontSizeFromPercent(100, 100, 0)).toBe(0)
+    expect(fontSizeFromPercent(100, 100, NaN)).toBe(0)
+    expect(fontSizeFromPercent(0, 100, 5)).toBe(0)
+  })
+})
 
 describe('anchorPosition', () => {
   // 画布 1000×800，水印 100×50，padding 10

@@ -1,0 +1,155 @@
+/* 文本对比（TextDiff）。随工具 chunk 按需加载
+ *
+ * 红绿底色按明暗外观各配一套：深色底上用浅色系高透明度，亮色底上用深色系低透明度。
+ * 文字始终是 --text-primary，靠底色区分增删，两套外观下字都看得清。
+ * 另有 +/- 符号列，不只靠颜色区分（色弱用户也能分辨）。 */
+
+.text-diff {
+  --diff-del-bg: rgba(248, 113, 113, 0.14);
+  --diff-del-mark: rgba(248, 113, 113, 0.42);
+  --diff-ins-bg: rgba(74, 222, 128, 0.12);
+  --diff-ins-mark: rgba(74, 222, 128, 0.38);
+  --diff-del-text: #fca5a5;
+  --diff-ins-text: #86efac;
+}
+
+:root[data-appearance='light'] .text-diff {
+  --diff-del-bg: rgba(220, 38, 38, 0.08);
+  --diff-del-mark: rgba(220, 38, 38, 0.24);
+  --diff-ins-bg: rgba(22, 163, 74, 0.09);
+  --diff-ins-mark: rgba(22, 163, 74, 0.26);
+  --diff-del-text: #b91c1c;
+  --diff-ins-text: #15803d;
+}
+
+.text-diff__inputs {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.text-diff__field {
+  min-width: 0;
+}
+
+.text-diff__textarea {
+  resize: vertical;
+  min-height: 160px;
+  line-height: 1.5;
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+}
+
+.text-diff__options {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 18px;
+  margin-top: 8px;
+}
+
+.text-diff__summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 14px;
+  margin-bottom: 10px;
+  font-size: 14px;
+}
+
+.text-diff__same {
+  color: var(--done);
+}
+
+.text-diff__stat {
+  font-weight: 600;
+}
+
+.text-diff__stat--insert {
+  color: var(--diff-ins-text);
+}
+
+.text-diff__stat--delete {
+  color: var(--diff-del-text);
+}
+
+/* 结果区限高滚动：几千行结果不该把整个页面撑成几万像素 */
+.diff-view {
+  max-height: 60vh;
+  overflow: auto;
+  margin-bottom: 12px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--surface-inset);
+  font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.diff-row {
+  display: grid;
+  grid-template-columns: auto auto 1.2em minmax(0, 1fr);
+  color: var(--text-primary);
+}
+
+.diff-row--delete {
+  background: var(--diff-del-bg);
+}
+
+.diff-row--insert {
+  background: var(--diff-ins-bg);
+}
+
+.diff-row__num {
+  min-width: 3.2em;
+  padding: 0 6px;
+  text-align: right;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  user-select: none;
+  border-right: 1px solid var(--glass-border);
+}
+
+.diff-row__sign {
+  text-align: center;
+  color: var(--text-secondary);
+  user-select: none;
+}
+
+.diff-row--delete .diff-row__sign {
+  color: var(--diff-del-text);
+}
+
+.diff-row--insert .diff-row__sign {
+  color: var(--diff-ins-text);
+}
+
+/* pre-wrap：保留缩进和连续空格（差异经常就在这里），长行自动折行而不是横向撑开 */
+.diff-row__text {
+  padding: 0 8px 0 2px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diff-mark {
+  text-decoration: none;
+  border-radius: 3px;
+}
+
+.diff-row--delete .diff-mark {
+  background: var(--diff-del-mark);
+}
+
+.diff-row--insert .diff-mark {
+  background: var(--diff-ins-mark);
+}
+
+@media (max-width: 640px) {
+  .text-diff__inputs {
+    grid-template-columns: 1fr;
+  }
+
+  .diff-row__num {
+    min-width: 2.4em;
+    padding: 0 3px;
+  }
+}

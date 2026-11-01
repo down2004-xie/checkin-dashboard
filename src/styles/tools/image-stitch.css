@@ -1,0 +1,191 @@
+/* 长图拼接：双文件入口、可排序图片列表和结果预览。
+ * 颜色全部走语义变量，深色 / 亮色共用一套结构。 */
+.stitch-pickers {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.stitch-pickers .file-picker {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+/* 方向、底色 chips 嵌在 unit-field 内，不继承外层 unit-row 的竖向间距。 */
+.stitch-chips.unit-row {
+  align-items: center;
+  margin: 0;
+}
+
+.stitch-list {
+  min-width: 0;
+  margin: 18px 0;
+}
+
+.stitch-list__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: var(--text-primary);
+}
+
+.stitch-list__head strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.stitch-list__head span {
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* compress-item 是旧验收脚本依赖的兼容类；布局由本工具自己的类接管。 */
+.stitch-items.compress-compare {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr));
+  gap: 12px;
+  margin: 0;
+}
+
+.stitch-item.compress-item {
+  min-width: 0;
+  padding: 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--surface-inset);
+}
+
+.stitch-item.compress-item img {
+  display: block;
+  width: 100%;
+  height: 150px;
+  max-height: 150px;
+  object-fit: contain;
+  border: 0;
+  border-radius: 8px;
+  background: var(--surface-inset-strong);
+}
+
+.stitch-item__caption {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+}
+
+.stitch-item__meta {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.stitch-item__order {
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  color: var(--accent);
+  background: var(--accent-soft);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.stitch-item__name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stitch-item__size {
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.stitch-item__actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.stitch-item__actions .btn {
+  min-width: 0;
+  padding: 5px 7px;
+  font-size: 12px;
+}
+
+.stitch-item__remove {
+  color: var(--warn);
+}
+
+.stitch-result {
+  min-width: 0;
+  margin: 18px 0;
+  padding: 14px;
+  border: 1px solid var(--glass-border);
+  border-radius: 12px;
+  background: var(--surface-inset);
+}
+
+.stitch-result__preview.image-slice-preview {
+  align-items: flex-start;
+  min-width: 0;
+  margin: 0 0 12px;
+}
+
+.stitch-result__preview img {
+  display: block;
+  max-width: 100%;
+  max-height: 360px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  background: var(--surface-inset-strong);
+}
+
+.stitch-result__preview .hint {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+.stitch-result__notice {
+  margin: 0 0 12px;
+  color: var(--warn);
+  font-size: 13px;
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
+
+.stitch-result__download {
+  display: inline-flex;
+  justify-content: center;
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .stitch-pickers {
+    grid-template-columns: 1fr;
+  }
+
+  .stitch-item.compress-item img {
+    height: 130px;
+    max-height: 130px;
+  }
+
+  .stitch-result {
+    padding: 12px;
+  }
+
+  .stitch-result__download {
+    width: 100%;
+  }
+}
