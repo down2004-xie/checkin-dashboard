@@ -113,10 +113,10 @@ try {
   assert.ok(backText && backText.r > 200, 'switch back to dark failed')
   record('切回深色正常')
 
-  // 9. 数据版本是 6
+  // 9. 数据版本是 7（v7 加了 diary；appearance 是 v6 加的，仍在）
   const ver = await page.evaluate("JSON.parse(localStorage.getItem('checkin-dashboard:data')).version")
-  assert.equal(ver, 6)
-  record('数据契约版本为 6（appearance 已入库）')
+  assert.equal(ver, 7)
+  record('数据契约版本为 7（appearance 仍在库中）')
 
   assert.deepEqual(failures, [], 'runtime exceptions: ' + JSON.stringify(failures))
   console.log('\nALL APPEARANCE CHECKS PASSED')

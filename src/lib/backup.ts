@@ -1,4 +1,4 @@
-import type { CheckInData, Todo } from '../types'
+import type { CheckInData, DiaryEntry, Todo } from '../types'
 import { DATA_VERSION } from '../types'
 import { dataProblem, droppedEntries, migrate } from './migrate'
 
@@ -168,7 +168,24 @@ export function mergeData(a: CheckInData, b: CheckInData): CheckInData {
     }
   }
 
-  return { version: DATA_VERSION, sites, records, todos,
+  // 日记同样按天 + 按 id 取并集（v7）。漏掉它的后果和漏合并待办一样：
+  // 在新设备上导入备份，页面一切正常但日记全部消失，且不报错。
+  // 同 id 两边内容不同时保留本机（a）版本，和待办、站点的口径一致。
+  const diary: Record<string, DiaryEntry[]> = {}
+  for (const source of [a, b]) {
+    for (const [day, items] of Object.entries(source.diary)) {
+      const merged = diary[day] ?? []
+      const seenEntryIds = new Set(merged.map((entry) => entry.id))
+      for (const item of items) {
+        if (seenEntryIds.has(item.id)) continue
+        seenEntryIds.add(item.id)
+        merged.push(item)
+      }
+      diary[day] = merged
+    }
+  }
+
+  return { version: DATA_VERSION, sites, records, todos, diary,
     targets: { ...b.targets, ...a.targets }, preferences: { ...a.preferences },
   }
 }

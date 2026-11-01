@@ -5,7 +5,7 @@ import { DATA_VERSION, DEFAULT_PREFERENCES } from '../types'
 import { buildHeatmap, groupByWeek, intensityOf, monthLabel, periodStats, summarizeDay } from './heatmap'
 
 function makeData(records: Record<string, string[]>): CheckInData {
-  return { version: DATA_VERSION, records, sites: [], todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+  return { version: DATA_VERSION, records, sites: [], todos: {}, diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
 }
 
 describe('intensityOf', () => {

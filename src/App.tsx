@@ -11,7 +11,7 @@ import { parseBookmarks, planImport, type BookmarkParseResult } from './lib/book
 import { emptyData } from './lib/storage'
 import { addDays } from './lib/date'
 import { siteHost } from './lib/site-form'
-import { filterSites, type SiteFilters } from './lib/sites'
+import { filterSites, pendingSites, type SiteFilters } from './lib/sites'
 import { ProgressHeader } from './components/ProgressHeader'
 import { FilterBar } from './components/FilterBar'
 import { SiteGrid } from './components/SiteGrid'
@@ -20,11 +20,13 @@ import { SiteForm } from './components/SiteForm'
 import { BookmarkImport } from './components/BookmarkImport'
 import { BackupBar } from './components/BackupBar'
 import { OrphanCleanup } from './components/OrphanCleanup'
+import { OpenPendingButton } from './components/OpenPendingButton'
 import { TodoPanel } from './components/TodoPanel'
 import { SettingsPanel } from './components/SettingsPanel'
 import { SakuraTree } from './components/SakuraTree'
 import { PetalLayer } from './components/PetalLayer'
 import { ToolboxView } from './components/toolbox/ToolboxView'
+import { DiaryView } from './components/DiaryView'
 
 interface ImportPreview {
   backup: Backup
@@ -47,7 +49,7 @@ export function App() {
   const { preferences, sites } = data
   useDaylight(preferences.theme, preferences.appearance)
   usePointerLight(preferences.effects === 'full')
-  const [view, setView] = useState<'dashboard' | 'tools'>('dashboard')
+  const [view, setView] = useState<'dashboard' | 'diary' | 'tools'>('dashboard')
   const [notice, setNotice] = useState<string | null>(null)
   const [filters, setFilters] = useState<SiteFilters>({ query: '', category: null, status: 'all', sort: 'manual' })
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -161,12 +163,17 @@ export function App() {
       {preferences.effects === 'full' && <PetalLayer burstId={burstId} />}
       <nav className="view-switch" aria-label="切换视图">
         <button type="button" className="view-switch__btn" aria-pressed={view === 'dashboard'} onClick={() => setView('dashboard')}>签到</button>
+        <button type="button" className="view-switch__btn" aria-pressed={view === 'diary'} onClick={() => setView('diary')}>日记</button>
         <button type="button" className="view-switch__btn" aria-pressed={view === 'tools'} onClick={() => setView('tools')}>工具箱</button>
       </nav>
       {view === 'tools' && <ToolboxView today={today} />}
+      {/* 只读只看保护模式；busy 不锁编辑框，否则每次自动保存时输入框都会闪一下禁用、丢焦点 */}
+      {view === 'diary' && <DiaryView diary={data.diary} today={today} readOnly={!!issue} error={error} run={run} />}
       {view === 'dashboard' && <>
       <ProgressHeader done={done} total={total} streak={statistics.streak} longest={statistics.longest} />
       <p className="dashboard-date">{today} · 今日目标 {total} 个{sites.length > total ? ` · 已暂停 ${sites.length - total} 个` : ''}</p>
+      {/* 只读操作（打开链接），放在 fieldset 外：保护模式下也能用 */}
+      <OpenPendingButton sites={pendingSites(sites, checkedIds)} />
 
       {issue && <section className="alert recovery" role="alert">
         <h2>数据保护模式</h2><p>{issue}。已停止写入，不会用默认数据覆盖原始内容。</p>
@@ -186,9 +193,9 @@ export function App() {
 
       {importPreview && <section className="panel import-preview" aria-label="备份导入预览">
         <h2>确认导入备份</h2>
-        <p>{importPreview.backup.data.sites.length} 个有效站点 · {Object.keys(importPreview.backup.data.records).length} 天签到记录 · {Object.values(importPreview.backup.data.todos).flat().length} 条待办</p>
-        <p>{importPreview.dropped > 0 ? `有 ${importPreview.dropped} 条数据无法读取，导入时会跳过（重复项会被自动合并，不计入）。` : '文件中的站点、记录和待办都能读取。'}</p>
-        <p className="hint">{issue ? '保护模式下将使用这份备份恢复数据。' : '签到记录取并集；同 ID 的站点、待办和同一天的目标保留本机版本。删除与取消勾选不会从备份反向同步，主题设置也保持本机偏好。'}</p>
+        <p>{importPreview.backup.data.sites.length} 个有效站点 · {Object.keys(importPreview.backup.data.records).length} 天签到记录 · {Object.values(importPreview.backup.data.todos).flat().length} 条待办 · {Object.values(importPreview.backup.data.diary).flat().length} 条日记</p>
+        <p>{importPreview.dropped > 0 ? `有 ${importPreview.dropped} 条数据无法读取，导入时会跳过（重复项会被自动合并，不计入）。` : '文件中的站点、记录、待办和日记都能读取。'}</p>
+        <p className="hint">{issue ? '保护模式下将使用这份备份恢复数据。' : '签到记录取并集；同 ID 的站点、待办、日记和同一天的目标保留本机版本。删除与取消勾选不会从备份反向同步，主题设置也保持本机偏好。'}</p>
         <div className="toolbar"><button className="btn btn--primary" disabled={busy} onClick={() => void confirmImport()}>{issue ? '确认恢复' : '确认合并'}</button><button className="btn" onClick={() => setImportPreview(null)}>取消</button></div>
       </section>}
 

@@ -74,6 +74,53 @@ export interface Todo {
   carriedFrom?: DateKey
 }
 
+/**
+ * 一条日记。和 Todo 一样是「用户数据」，按天归属，一天可以有多条。
+ *
+ * 为什么按天归属而不是一份扁平的全局列表：这个项目的核心维度就是「一天」，
+ * 签到、待办、目标快照全挂在日期 key 上，日记跟着日期走才同源，
+ * 也才能和它们共用同一套「按天分组」的迁移/备份/清洗代码。
+ *
+ * 为什么一天要支持多条（而不是一天一整篇）：
+ * 用户可能上午开一个会、下午写一段实习日志、晚上再随手记两句。
+ * 合成一整篇会互相干扰；拆成多条可以各自带标题、各自删除。
+ */
+export interface DiaryEntry {
+  /**
+   * 唯一标识，由 `createDiaryEntry` 生成（随机 UUID）。
+   *
+   * 和 Todo.id 完全同一条理由：它不是历史锚点（不像 Site.id 由域名派生），
+   * 只需要在**当天**唯一定位得了一条。随机 id 顺带允许「同一天写两条
+   * 一模一样的日记」共存，不会互相顶掉。
+   */
+  id: string
+
+  /**
+   * 标题，可选。会议/实习日志可以起个名，纯日记可以留空。
+   *
+   * 空标题统一存成 `undefined`（不存空串），这样「有没有标题」判断简单，
+   * 清洗时也不会出现 `title: ''` 这种半成品。
+   */
+  title?: string
+
+  /**
+   * 正文，纯文本。**必填且非空**（只有标题没有正文的条目没有意义）。
+   *
+   * 刻意不支持图片：localStorage 每源约 5 MB，图片转 base64 几张就爆配额，
+   * 而纯文本 5 MB 够写几百万字。见 CLAUDE.md 的技术红线。
+   */
+  text: string
+
+  /**
+   * 创建时间，ISO 字符串。只用于**同一天内多条日记的排序**，不是身份。
+   *
+   * 刻意设成可选：老数据/手改数据可能没有它，此时按空串排、稳定靠 id，
+   * **不因为缺元数据就丢正文**（和 sanitizeTodos 对 done 的宽容同一条思路）。
+   * 迁移刻意不伪造时间戳 —— 那是编数据。
+   */
+  createdAt?: string
+}
+
 export interface Preferences {
   theme: 'auto' | 'dawn' | 'day' | 'dusk' | 'night'
   effects: 'full' | 'light' | 'static'
@@ -95,6 +142,7 @@ export interface CheckInData {
    * v4：加了 todos —— 按天归属的每日待办。纯新增字段，不重写既有数据。
    * v5：加了 targets（每日目标快照）和 preferences（主题/特效/紧凑）。
    * v6：preferences 加了 appearance（明暗外观）。纯新增枚举字段。
+   * v7：加了 diary —— 按天归属的电子日记，一天可多条。纯新增字段。
    * 以后加字段（备注、标签）时必须再 +1，并在 lib/migrate.ts 里写迁移分支。
    * 没有版本号就只能让用户清库重来。
    */
@@ -119,8 +167,19 @@ export interface CheckInData {
    */
   todos: Record<DateKey, Todo[]>
   targets: Record<DateKey, Site[]>
+
+  /**
+   * 日期 -> 当天的日记条目（v7 新增）。
+   *
+   * 和 todos 同构（`Record<DateKey, _[]>`），刻意复用同一套「按天分组」的形状，
+   * 于是迁移、备份合并、清洗都能照抄待办那一套，少写一份逻辑。
+   *
+   * 注意：**日记不参与签到进度环，也不触发樱花满开** —— 和待办同一个定位，
+   * 它是「今天记下的东西」，不是「今天要完成的任务」。
+   */
+  diary: Record<DateKey, DiaryEntry[]>
   preferences: Preferences
 }
 
 /** 当前的数据格式版本，与 CheckInData.version 对应 */
-export const DATA_VERSION = 6
+export const DATA_VERSION = 7

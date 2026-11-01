@@ -15,6 +15,8 @@
     "test:orphan": "node scripts/orphan-check.mjs",
     "test:acceptance": "node scripts/acceptance-check.mjs",
     "test:drag": "node scripts/drag-check.mjs",
+    "test:open": "node scripts/open-pending-check.mjs",
+    "test:diary": "node scripts/diary-check.mjs",
     "probe:backdrop": "node scripts/backdrop-probe.mjs"
   },
   "dependencies": {

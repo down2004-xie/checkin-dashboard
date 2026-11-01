@@ -29,6 +29,18 @@ export function filterSites(sites: Site[], checked: ReadonlySet<string>, filters
 }
 
 /**
+ * 「一键打开未签到」要打开哪些站：今天没签、也没暂停的**全部**站点。
+ *
+ * 刻意不吃当前筛选：按钮语义是「把今天剩下的都打开」，若跟着筛选走，
+ * 用户筛着「视频」点一下只开了一部分，会以为功能漏站。
+ * 顺序复用 `filterSites` 的手动顺序（置顶在前），和不筛选时网格的顺序一致，
+ * 浏览器标签栏的顺序就能和卡片对上。
+ */
+export function pendingSites(sites: Site[], checked: ReadonlySet<string>): Site[] {
+  return filterSites(sites, checked, { query: '', category: null, status: 'pending', sort: 'manual' })
+}
+
+/**
  * 手动排序下，某个站点能和哪个相邻站点交换位置？返回对方的 id，不能换则返回 null。
  *
  * ## 为什么必须基于**可见列表**而不是存储数组

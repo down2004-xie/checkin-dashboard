@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Site } from '../types'
-import { canReorder, filterSites } from './sites'
+import { canReorder, filterSites, pendingSites } from './sites'
 
 const NORMAL_A: Site = { id: 'a', name: 'A', url: 'https://a' }
 const NORMAL_B: Site = { id: 'b', name: 'B', url: 'https://b' }
@@ -51,5 +51,31 @@ describe('canReorder', () => {
     expect(visible.map((site) => site.id)).toEqual(['a', 'b'])
     expect(canReorder(visible, 'a', 'b')).toBe(true)
     expect(canReorder(visible, 'a', 'c')).toBe(false) // c 不在可见列表里
+  })
+})
+
+describe('pendingSites', () => {
+  const PAUSED: Site = { id: 'p', name: 'P', url: 'https://p', paused: true }
+  const ALL: Site[] = [NORMAL_A, PAUSED, NORMAL_B, PINNED_X, NORMAL_C]
+
+  it('排除已签到和已暂停的站点', () => {
+    expect(pendingSites(ALL, new Set(['b'])).map((site) => site.id)).toEqual(['x', 'a', 'c'])
+  })
+
+  it('置顶在前，其余保持存储顺序（和不筛选时的网格一致）', () => {
+    expect(pendingSites(ALL, new Set()).map((site) => site.id)).toEqual(['x', 'a', 'b', 'c'])
+  })
+
+  it('已暂停的站点即使今天有记录也不打开', () => {
+    expect(pendingSites([PAUSED], new Set(['p']))).toEqual([])
+    expect(pendingSites([PAUSED], new Set())).toEqual([])
+  })
+
+  it('全部签完 → 空数组', () => {
+    expect(pendingSites(ALL, new Set(['a', 'b', 'c', 'x']))).toEqual([])
+  })
+
+  it('不受孤儿记录影响（checked 里有已删站点的 id）', () => {
+    expect(pendingSites([NORMAL_A], new Set(['ghost'])).map((site) => site.id)).toEqual(['a'])
   })
 })

@@ -1,4 +1,4 @@
-import type { CheckInData, DateKey, Preferences, Site, Todo } from '../types'
+import type { CheckInData, DateKey, DiaryEntry, Preferences, Site, Todo } from '../types'
 import { DATA_VERSION, DEFAULT_PREFERENCES } from '../types'
 import { isDateKey } from './date'
 import { LEGACY_SEED_IDS, SITES } from '../data/sites'
@@ -122,7 +122,7 @@ export function dedupeSitesByHost(sites: Site[]): Site[] {
 
 /** 空数据，作为一切异常情况的兜底。每次返回新对象，防止调用方互相污染。 */
 export function emptyData(): CheckInData {
-  return { version: DATA_VERSION, sites: [...SITES], records: {}, todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+  return { version: DATA_VERSION, sites: [...SITES], records: {}, todos: {}, diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
 }
 
 /**
@@ -162,6 +162,47 @@ export function sanitizeTodos(raw: unknown): Record<DateKey, Todo[]> {
     if (items.length > 0) todos[key] = items
   }
   return todos
+}
+
+/**
+ * 校验 diary（v7 新增）：日期 -> 当天日记条目数组。
+ *
+ * 和 sanitizeTodos 是同一套思路（非对象→{}，非数组条目丢弃，空数组不留 key），
+ * 逐条还要校验：
+ * - `id`/`text` 缺失或类型不对 → **整条丢弃**（没有身份或没有正文，这条没法用；
+ *   正文必填是本项目的约定）；
+ * - `title` 缺失/空串 → 不写这个字段（空标题存 undefined）；
+ * - `createdAt` 缺失/类型不对 → 不写这个字段，**不丢整条**，排序时按空串对待。
+ *
+ * 一句话：正文比元数据值钱，宁可把一条日记显示成「没有时间」，也不能把用户写的字弄丢。
+ */
+export function sanitizeDiary(raw: unknown): Record<DateKey, DiaryEntry[]> {
+  if (typeof raw !== 'object' || raw === null) return {}
+
+  const diary: Record<DateKey, DiaryEntry[]> = {}
+  for (const [key, value] of Object.entries(raw)) {
+    if (!isDateKey(key) || !Array.isArray(value)) continue
+
+    const items: DiaryEntry[] = []
+    const seenIds = new Set<string>()
+    for (const item of value) {
+      if (typeof item !== 'object' || item === null) continue
+      const entry = item as Partial<DiaryEntry>
+      if (typeof entry.id !== 'string' || typeof entry.text !== 'string') continue
+      if (!entry.id.trim() || !entry.text.trim() || seenIds.has(entry.id)) continue
+      seenIds.add(entry.id)
+      items.push({
+        id: entry.id,
+        text: entry.text,
+        ...(typeof entry.title === 'string' && entry.title.trim() !== '' ? { title: entry.title } : {}),
+        ...(typeof entry.createdAt === 'string' && entry.createdAt !== '' ? { createdAt: entry.createdAt } : {}),
+      })
+    }
+
+    // 空数组没有意义，删掉这个天 key 保持存储干净（和 sanitizeRecords / sanitizeTodos 一致）
+    if (items.length > 0) diary[key] = items
+  }
+  return diary
 }
 
 /**
@@ -303,7 +344,9 @@ export function migrate(raw: unknown): CheckInData {
       if (isDateKey(day) && Array.isArray(snapshot)) targets[day] = dedupeSitesByHost(sanitizeSites(snapshot))
     }
   }
-  return { version: DATA_VERSION, sites: dedupeSitesByHost(sites), records, todos, targets, preferences: sanitizePreferences(candidate.preferences) }
+  // v6 → v7：新增 diary 字段。和 todos 同理，纯加字段、对所有版本都成立，在末尾统一兜底。
+  const diary = sanitizeDiary(candidate.diary)
+  return { version: DATA_VERSION, sites: dedupeSitesByHost(sites), records, todos, diary, targets, preferences: sanitizePreferences(candidate.preferences) }
 }
 
 export function isObject(value: unknown): value is Record<string, unknown> {
@@ -344,6 +387,7 @@ export function dataProblem(raw: unknown): string | null {
   if (raw.version >= 2 && !Array.isArray(raw.sites)) return '站点列表格式错误'
   if (raw.version >= 4 && !isObject(raw.todos)) return '待办列表格式错误'
   if (raw.version >= 5 && (!isObject(raw.targets) || !isObject(raw.preferences))) return '目标快照或偏好设置格式错误'
+  if (raw.version >= 7 && !isObject(raw.diary)) return '日记数据格式错误'
   return null
 }
 
@@ -375,9 +419,11 @@ export function droppedEntries(raw: unknown): number {
 
   if (Array.isArray(raw.sites)) dropped += raw.sites.filter((item) => !isUsableSite(item)).length
 
+  // 日记和待办同一把尺子：id、text 非空即可用；title / createdAt 缺失只降级，不算丢弃
   for (const [field, usable] of [
     ['records', (item: unknown) => isRecordId(item)],
     ['todos', isUsableTodo],
+    ['diary', isUsableTodo],
   ] as const) {
     if (!isObject(raw[field])) continue
     for (const [day, entries] of Object.entries(raw[field])) {

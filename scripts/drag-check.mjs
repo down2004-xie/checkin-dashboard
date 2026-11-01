@@ -111,7 +111,7 @@ try {
   await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 1200, deviceScaleFactor: 1, mobile: false })
   await page.send('Page.navigate', { url: origin })
   await ready()
-  await waitFor(() => page.evaluate(`${store}?.version === 6`), 'initial data not saved')
+  await waitFor(() => page.evaluate(`${store}?.version === 7`), 'initial data not saved')
 
   /* ---------- 0. 切到手动顺序，确认每张卡都有拖拽把手 ---------- */
   await page.evaluate(`(() => {

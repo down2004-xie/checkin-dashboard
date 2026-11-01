@@ -14,7 +14,7 @@ function makeData(records: Record<string, string[]>, sites: Site[] = [SITE_A, SI
     sites,
     records,
     todos: {},
-    targets: {},
+    diary: {}, targets: {},
     preferences: { ...DEFAULT_PREFERENCES },
   }
 }

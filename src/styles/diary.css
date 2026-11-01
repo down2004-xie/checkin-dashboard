@@ -1,0 +1,301 @@
+/* ============================================================
+ * 电子日记视图（v7）
+ *
+ * 颜色只用 tokens.css 的变量：深色 / 亮色外观切换时由变量自动换，
+ * 这里不写死任何颜色，否则亮色下会出现「白底白字」。
+ *
+ * backdrop-filter 只挂在外层 .diary__panel 上一次，**每条日记不挂**：
+ * 日记多了以后每条一个 blur，中低端机滚动会掉帧（CLAUDE.md 技术红线 1）。
+ * 条目用半透明的 --surface-inset 叠在已经模糊过的面板上，视觉上一样是「玻璃里的卡片」。
+ * ============================================================ */
+
+.diary__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+  flex-wrap: wrap;
+  margin-bottom: 20px;
+}
+
+.diary__heading {
+  margin: 0 0 6px;
+  font-size: 32px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+
+.diary__subtitle {
+  margin: 0;
+  max-width: 560px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--text-secondary);
+}
+
+.diary__search {
+  flex: 1;
+  min-width: 200px;
+  max-width: 320px;
+}
+
+/* 面板外壳和 .todo 同一套：玻璃底 + 边框 + 内阴影 */
+.diary__panel {
+  padding: 18px 20px;
+  margin-bottom: 28px;
+  border-radius: var(--radius-card);
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate));
+  box-shadow: var(--glass-inset);
+}
+
+.diary__panel-title {
+  margin: 0 0 14px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.diary__empty {
+  margin: 0 0 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ---------- 日期切换 ---------- */
+
+.diary-nav {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.diary-nav__date {
+  padding: 6px 10px;
+  /* 让浏览器自带的日期选择器图标跟随明暗外观 */
+  color-scheme: dark;
+}
+
+:root[data-appearance='light'] .diary-nav__date {
+  color-scheme: light;
+}
+
+/* .chip 原本没有禁用态（features.css 里只有 .btn:disabled）。
+   只在日记视图内补，免得改动波及签到页的其他 chip */
+.diary .chip:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.diary-recent {
+  margin-bottom: 16px;
+}
+
+/* ---------- 条目 ---------- */
+
+.diary__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-bottom: 16px;
+}
+
+.diary-entry {
+  padding: 12px 14px;
+  border-radius: 14px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-inset);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+/* 搜索结果跳转过来的那一条：描一圈强调色，让用户一眼找到 */
+.diary-entry--focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.diary-entry__head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 6px;
+}
+
+.diary-entry__meta {
+  min-width: 0;
+}
+
+.diary-entry__title {
+  margin: 0 0 2px;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+
+.diary-entry__info {
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.diary-entry__actions {
+  display: flex;
+  flex-shrink: 0;
+  gap: 6px;
+}
+
+/* 正文保留用户的换行和空行（日记的排版就是这些），长单词/链接强制折行不撑破面板 */
+.diary-entry__text {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.75;
+  color: var(--text-primary);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.diary-entry__editor,
+.diary-composer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.diary__textarea {
+  min-height: 120px;
+  resize: vertical;
+  line-height: 1.7;
+  white-space: pre-wrap;
+}
+
+.diary-entry__status-row,
+.diary-composer__actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.diary__status {
+  margin-right: auto;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.diary__status--warn {
+  color: var(--warn);
+}
+
+/* ---------- 搜索结果 ---------- */
+
+.diary-hits {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.diary-hit {
+  width: 100%;
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 2px 12px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--glass-border);
+  background: var(--surface-inset);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
+}
+
+.diary-hit:hover {
+  background: var(--hover-tint-strong);
+  border-color: var(--border-hover);
+}
+
+.diary-hit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.diary-hit__day {
+  grid-row: span 2;
+  font-size: 12px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.diary-hit__title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.diary-hit__preview {
+  grid-column: 2;
+  font-size: 13px;
+  color: var(--text-secondary);
+  overflow-wrap: anywhere;
+}
+
+/* ---------- 移动端与降级 ---------- */
+
+@media (max-width: 640px) {
+  .diary__heading {
+    font-size: 26px;
+  }
+
+  .diary__search {
+    max-width: none;
+  }
+
+  /* 和签到卡片一致：移动端去掉 blur，用更实的底色保证可读 */
+  .diary__panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--card-fallback);
+    padding: 14px;
+  }
+
+  .diary-entry__head {
+    flex-direction: column;
+  }
+
+  .diary-hit {
+    grid-template-columns: 1fr;
+  }
+
+  .diary-hit__day {
+    grid-row: auto;
+  }
+
+  .diary-hit__preview {
+    grid-column: 1;
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .diary__panel {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--surface-inset-strong);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .diary-entry,
+  .diary-hit {
+    transition: none;
+  }
+}

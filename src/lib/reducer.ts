@@ -1,4 +1,4 @@
-import type { CheckInData, DateKey, Preferences, Site, Todo } from '../types'
+import type { CheckInData, DateKey, DiaryEntry, Preferences, Site, Todo } from '../types'
 import { mergeData } from './backup'
 import { canReorder } from './sites'
 import { removeOrphans } from './orphans'
@@ -24,6 +24,10 @@ export type CheckInAction =
   | { type: 'todoRestored'; day: DateKey; todo: Todo; index: number }
   | { type: 'todosCarried'; from: DateKey; day: DateKey }
   | { type: 'orphansCleared' }
+  | { type: 'diaryAdded'; day: DateKey; entry: DiaryEntry }
+  | { type: 'diaryUpdated'; day: DateKey; id: string; patch: { title?: string; text?: string } }
+  | { type: 'diaryRemoved'; day: DateKey; id: string }
+  | { type: 'diaryRestored'; day: DateKey; entry: DiaryEntry; index: number }
 
 /**
  * 所有写操作的纯函数实现。
@@ -140,6 +144,14 @@ export function applyAction(data: CheckInData, action: CheckInAction): CheckInDa
       return handleTodoToggled(data, action.day, action.id)
     case 'todoRemoved':
       return handleTodoRemoved(data, action.day, action.id)
+    case 'diaryAdded':
+      return handleDiaryAdded(data, action.day, action.entry)
+    case 'diaryUpdated':
+      return handleDiaryUpdated(data, action.day, action.id, action.patch)
+    case 'diaryRemoved':
+      return handleDiaryRemoved(data, action.day, action.id)
+    case 'diaryRestored':
+      return handleDiaryRestored(data, action.day, action.entry, action.index)
     case 'replaced':
       return action.data
   }
@@ -277,4 +289,80 @@ function handleTodoRemoved(data: CheckInData, day: DateKey, id: string): CheckIn
   }
 
   return { ...data, todos }
+}
+
+/* ---- 日记（v7） ---- */
+
+/**
+ * 日记的四条操作和待办同一套规矩：**不碰 sites / records / todos**，只动 diary 这一天；
+ * 不变异入参；找不到目标就原样返回（引用不变，React 不重渲染、storage 不重写）。
+ *
+ * 和待办不同的一点：正文**不 trim 内部内容**。日记是长文本，用户的缩进和空行是排版，
+ * 只在判断「是不是空的」时用 trim，存的时候原样保留。标题是单行短文本，存之前 trim。
+ */
+
+function handleDiaryAdded(data: CheckInData, day: DateKey, entry: DiaryEntry): CheckInData {
+  if (!entry.text.trim()) return data // 正文必填，空正文的条目没有意义
+  const items = data.diary[day] ?? []
+  if (items.some((item) => item.id === entry.id)) return data // 幂等：重复提交同一条不会写两次
+  return { ...data, diary: { ...data.diary, [day]: [...items, normalizeTitle(entry)] } }
+}
+
+function handleDiaryUpdated(
+  data: CheckInData,
+  day: DateKey,
+  id: string,
+  patch: { title?: string; text?: string },
+): CheckInData {
+  const items = data.diary[day]
+  const index = items?.findIndex((entry) => entry.id === id) ?? -1
+  if (!items || index === -1) return data
+  // 编辑后正文变空就拒绝 —— 想删请走删除，避免「清空了但条目还在」的半成品
+  if (patch.text !== undefined && !patch.text.trim()) return data
+
+  const current = items[index]
+  const next = normalizeTitle({
+    ...current,
+    ...(patch.text !== undefined ? { text: patch.text } : {}),
+    ...(patch.title !== undefined ? { title: patch.title } : {}),
+  })
+  if (next.text === current.text && next.title === current.title) return data // 无变化，原样返回
+
+  const updated = [...items]
+  updated[index] = next
+  return { ...data, diary: { ...data.diary, [day]: updated } }
+}
+
+function handleDiaryRemoved(data: CheckInData, day: DateKey, id: string): CheckInData {
+  const items = data.diary[day]
+  if (items === undefined) return data
+
+  const next = items.filter((entry) => entry.id !== id)
+  if (next.length === items.length) return data // 没找到，无变化
+
+  const diary = { ...data.diary }
+  // 删空就删掉这个天 key，和 todos / records 一致，存储里不留 { '2026-10-26': [] } 空壳
+  if (next.length === 0) delete diary[day]
+  else diary[day] = next
+  return { ...data, diary }
+}
+
+/** 撤销删除：放回原位置（index 越界就放到末尾）。同 id 已存在则幂等返回 */
+function handleDiaryRestored(data: CheckInData, day: DateKey, entry: DiaryEntry, index: number): CheckInData {
+  const items = data.diary[day] ?? []
+  if (items.some((item) => item.id === entry.id)) return data
+  const next = [...items]
+  next.splice(Math.max(0, Math.min(index, next.length)), 0, entry)
+  return { ...data, diary: { ...data.diary, [day]: next } }
+}
+
+/**
+ * 标题归一化：trim 后为空就**删掉这个字段**（不存空串）。
+ * 和 sanitizeDiary 的口径一致 —— 否则存进去是 `title: ''`，读回来变成没有 title，
+ * 同一条日记在「刚写完」和「刷新后」长得不一样。
+ */
+function normalizeTitle(entry: DiaryEntry): DiaryEntry {
+  const { title, ...rest } = entry
+  const trimmed = title?.trim()
+  return trimmed ? { ...rest, title: trimmed } : rest
 }

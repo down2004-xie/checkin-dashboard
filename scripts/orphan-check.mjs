@@ -152,9 +152,9 @@ try {
   assert.match(emptyHint, /1 个已删除站点/, 'all records should be orphans when no sites: ' + emptyHint)
   record('站点清空时所有历史都判为孤儿（不依赖「有不存在的 id」这种特殊条件）')
 
-  // 10. 数据版本没被这次操作改动
-  assert.equal(await page.evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(KEY)})).version`), 6)
-  record('清理不涉及数据结构变更，版本仍为 6')
+  // 10. 预置的 v6 数据在首次写盘时迁到 v7，清理本身不再改版本
+  assert.equal(await page.evaluate(`JSON.parse(localStorage.getItem(${JSON.stringify(KEY)})).version`), 7)
+  record('清理不涉及数据结构变更，版本为当前的 7')
 
   assert.deepEqual(failures, [], 'runtime exceptions: ' + JSON.stringify(failures))
   console.log('\nALL ORPHAN CHECKS PASSED')

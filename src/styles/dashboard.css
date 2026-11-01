@@ -1,5 +1,7 @@
 .dashboard-controls { border: 0; padding: 0; margin: 0; min-width: 0; }
 .dashboard-date { margin: -10px 0 24px; color: var(--text-secondary); font-size: 13px; }
+.open-pending { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; margin: -12px 0 24px; }
+.open-pending .notice { flex-basis: 100%; margin: 0; }
 .panel { padding: 20px; margin-bottom: 24px; border: 1px solid var(--glass-border); border-radius: var(--radius-card); background: var(--glass-bg); }
 .panel h2 { font-size: 18px; margin: 0 0 12px; }
 .panel h3 { font-size: 14px; margin: 18px 0 8px; }

@@ -12,6 +12,7 @@ import './styles/features.css'
 import './styles/sakura.css'
 import './styles/dashboard.css'
 import './styles/toolbox.css'
+import './styles/diary.css'
 
 import { App } from './App'
 

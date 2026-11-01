@@ -2,8 +2,11 @@ import { describe, expect, it } from 'vitest'
 
 import { DATA_VERSION } from '../types'
 import {
+  dataProblem,
+  droppedEntries,
   emptyData,
   migrate,
+  sanitizeDiary,
   sanitizeRecords,
   sanitizeSites,
   sanitizeTodos,
@@ -333,5 +336,166 @@ describe('emptyData', () => {
     expect(data.sites.length).toBeGreaterThan(0)
     expect(data.records).toEqual({})
     expect(data.todos).toEqual({})
+  })
+})
+describe('sanitizeDiary', () => {
+  it('非对象输入返回 {}', () => {
+    expect(sanitizeDiary(undefined)).toEqual({})
+    expect(sanitizeDiary(null)).toEqual({})
+    expect(sanitizeDiary('日记')).toEqual({})
+  })
+
+  it('非法日期 key 和非数组的值整组跳过', () => {
+    expect(sanitizeDiary({
+      broken: [{ id: 'a', text: '正文' }],
+      '2026-02-30': [{ id: 'b', text: '正文' }],
+      '2026-10-26': '不是数组',
+    })).toEqual({})
+  })
+
+  it('id 或 text 缺失、类型不对的条目整条丢弃', () => {
+    expect(sanitizeDiary({
+      '2026-10-26': [
+        { text: '没有 id' },
+        { id: 'no-text' },
+        { id: 1, text: 'id 是数字' },
+        { id: 'num-text', text: 42 },
+        null,
+        '字符串',
+        { id: 'ok', text: '留下' },
+      ],
+    })).toEqual({ '2026-10-26': [{ id: 'ok', text: '留下' }] })
+  })
+
+  it('纯空白正文的条目丢弃（正文必填）', () => {
+    expect(sanitizeDiary({ '2026-10-26': [{ id: 'a', text: '  \n\t ', title: '只有标题' }] })).toEqual({})
+  })
+
+  it('空标题、纯空白标题、非字符串标题都不写 title 字段', () => {
+    const result = sanitizeDiary({
+      '2026-10-26': [
+        { id: 'a', text: '正文', title: '' },
+        { id: 'b', text: '正文', title: '   ' },
+        { id: 'c', text: '正文', title: 123 },
+        { id: 'd', text: '正文', title: '周会' },
+      ],
+    })
+    expect(result['2026-10-26'].map((entry) => 'title' in entry)).toEqual([false, false, false, true])
+    expect(result['2026-10-26'][3].title).toBe('周会')
+  })
+
+  it('缺 createdAt 或类型不对时保留条目，只是没有时间（正文比元数据值钱）', () => {
+    expect(sanitizeDiary({
+      '2026-10-26': [
+        { id: 'a', text: '老数据' },
+        { id: 'b', text: '坏时间', createdAt: 123 },
+        { id: 'c', text: '有时间', createdAt: '2026-10-26T08:00:00.000Z' },
+      ],
+    })).toEqual({
+      '2026-10-26': [
+        { id: 'a', text: '老数据' },
+        { id: 'b', text: '坏时间' },
+        { id: 'c', text: '有时间', createdAt: '2026-10-26T08:00:00.000Z' },
+      ],
+    })
+  })
+
+  it('同一天重复 id 只保留第一条', () => {
+    expect(sanitizeDiary({ '2026-10-26': [{ id: 'a', text: '第一条' }, { id: 'a', text: '第二条' }] }))
+      .toEqual({ '2026-10-26': [{ id: 'a', text: '第一条' }] })
+  })
+
+  it('不保留未知字段', () => {
+    expect(sanitizeDiary({ '2026-10-26': [{ id: 'a', text: '正文', extra: '多余' }] }))
+      .toEqual({ '2026-10-26': [{ id: 'a', text: '正文' }] })
+  })
+
+  it('过滤后为空的天不留 key', () => {
+    expect(sanitizeDiary({ '2026-10-25': [], '2026-10-26': [{ id: '', text: '空 id' }] })).toEqual({})
+  })
+})
+
+describe('droppedEntries：日记', () => {
+  const base = () => ({ ...emptyData(), diary: {} as Record<string, unknown[]> })
+
+  it('一条读不回来的日记计 1', () => {
+    expect(droppedEntries({ ...base(), diary: { '2026-10-26': [{ id: 'a', text: '好的' }, { id: 'b' }] } })).toBe(1)
+  })
+
+  it('纯空白正文的日记计入丢弃 —— 和 sanitizeDiary 同一把尺子', () => {
+    // sanitizeDiary 会丢掉它；droppedEntries 若不计入，这条就是「静默丢失」：
+    // 被洗掉了却没进保护模式，用户也不会被提醒先下载原始数据
+    const raw = { ...base(), diary: { '2026-10-26': [{ id: 'a', text: '   \n ' }] } }
+    expect(sanitizeDiary(raw.diary)).toEqual({})
+    expect(droppedEntries(raw)).toBe(1)
+  })
+
+  it('重复 id 不算丢弃（内容还在，不能触发保护模式，见 MY-ISSUES #13）', () => {
+    expect(droppedEntries({ ...base(), diary: { '2026-10-26': [{ id: 'a', text: '一' }, { id: 'a', text: '二' }] } })).toBe(0)
+  })
+
+  it('缺 createdAt / title 不算丢弃', () => {
+    expect(droppedEntries({ ...base(), diary: { '2026-10-26': [{ id: 'a', text: '老数据' }, { id: 'b', text: '坏标题', title: 1 }] } })).toBe(0)
+  })
+
+  it('非法日期 key 下的条目整组计入', () => {
+    expect(droppedEntries({ ...base(), diary: { broken: [{ id: 'a', text: '一' }, { id: 'b', text: '二' }] } })).toBe(2)
+  })
+
+  it('某天的值不是数组计 1', () => {
+    expect(droppedEntries({ ...base(), diary: { '2026-10-26': '坏' } })).toBe(1)
+  })
+})
+
+describe('dataProblem：日记字段', () => {
+  const { diary: _drop, ...withoutDiary } = emptyData()
+
+  it('v7 数据缺 diary 报错', () => {
+    expect(dataProblem({ ...withoutDiary, version: 7 })).toBe('日记数据格式错误')
+  })
+
+  it('v7 数据 diary 是数组也报错', () => {
+    expect(dataProblem({ ...withoutDiary, version: 7, diary: [] })).toBe('日记数据格式错误')
+  })
+
+  it('v6 数据没有 diary 是正常的', () => {
+    expect(dataProblem({ ...withoutDiary, version: 6 })).toBeNull()
+  })
+
+  it('当前版本的完整空数据没有问题', () => {
+    expect(dataProblem(emptyData())).toBeNull()
+  })
+})
+
+describe('v6 → v7：新增 diary 字段', () => {
+  it('v6 数据升级后 version 是 7，diary 是 {}，其余字段不变', () => {
+    const { diary: _drop, ...v6 } = { ...emptyData(), version: 6, records: { '2026-10-25': ['jd-com'] } }
+    const result = migrate(v6)
+    expect(result.version).toBe(7)
+    expect(result.diary).toEqual({})
+    expect(result.records).toEqual({ '2026-10-25': ['jd-com'] })
+  })
+
+  it('v7 数据的日记原样保留', () => {
+    const diary = {
+      '2026-10-26': [
+        { id: 'a', title: '周会', text: '  缩进\n\n空行', createdAt: '2026-10-26T08:00:00.000Z' },
+        { id: 'b', text: '没有标题' },
+      ],
+    }
+    expect(migrate({ ...emptyData(), diary }).diary).toEqual(diary)
+  })
+
+  it('v1 数据仍能一路升到当前版本，diary 为 {}', () => {
+    const result = migrate({ version: 1, records: { '2026-10-01': ['bilibili'] } })
+    expect(result.version).toBe(DATA_VERSION)
+    expect(result.diary).toEqual({})
+    expect(result.records).toEqual({ '2026-10-01': ['bilibili-com'] })
+  })
+})
+
+describe('emptyData：日记', () => {
+  it('带空的 diary', () => {
+    expect(emptyData().diary).toEqual({})
   })
 })

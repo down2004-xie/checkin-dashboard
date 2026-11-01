@@ -617,3 +617,29 @@
     从此随仓库走。这条以前没意识到，是「脚本一直在本地能跑」造成的错觉。
   验证：`tsc --noEmit` 0 错误；`vitest run` **529 用例**全过；`vite build` 成功且 15 个工具各自独立 chunk；
   `test:browser` 23 / `test:toolbox` 20 / `test:appearance` 6 / `test:orphan` 9 / `test:acceptance` 8 / `test:drag` 4 全绿。
+- 2026-11-01 阶段 24 电子日记（数据契约升 v7，三个子代理并行：单测 / 界面 / 文档）。
+  **不产生问题编号**（没有超过 30 分钟的排查），但记三条可复用的点：
+  - **升版本的连带：五个浏览器脚本把「写盘后 version === 6」写死了**
+    （`browser-check` / `acceptance-check` / `drag-check` / `appearance-check` / `orphan-check`）。
+    `DATA_VERSION` 一升，这五个全红，和功能改动无关。已全部改成 7；`orphan-check` 预置的
+    `version: 6` 是输入数据，刻意保留，正好覆盖 v6→v7 迁移。
+    同源风险：下次升 v8 还会再撞一次。脚本是 `.mjs`，没法直接 import TS 里的常量；
+    要根治得让脚本从页面读 `DATA_VERSION` 或从 `types.ts` 文本里解析。先只记不修。
+  - **长文本编辑框的草稿不能跟着 props 走**：`useCheckInStore` 在窗口 focus 时会 refresh，
+    `JSON.parse` 每次都生成新对象。草稿只要依赖 props，切走窗口再回来就会被旧内容顶掉。
+    做法是草稿只在点「编辑」那一刻初始化一次；定时器、失焦、卸载回调通过 ref 读最新草稿。
+    这条是设计时防住的，`test:diary` 里有专门断言，注入「草稿跟 props 变」后会报 `focus refresh clobbered the draft`。
+  - **反验抓到一个测试漏洞**：放宽 `droppedEntries` 让纯空白正文算可用，一开始 0 条测试变红。
+    后果是这种条目被 `sanitizeDiary` 静默洗掉、却不触发保护模式，用户收不到「先下载原始数据」的提醒。
+    补用例后注入会红 1 条。和 #9 学习 2 同一个教训：没反验过的测试不算数。
+  验证：`tsc --noEmit` 0 错误；`vitest run` **33 文件 / 620 用例**全过；`vite build` 成功；
+  `test:diary` / `test:browser` 23 / `test:appearance` / `test:orphan` / `test:acceptance` / `test:drag` / `test:toolbox` 全部退出码 0。
+- 2026-11-01 阶段 24 收尾：用户人工验收通过；按用户要求加关页提醒（`hooks/useLeaveGuard.ts` + `hasUnsavedDraft`）。
+  **不产生问题编号**，记两条可复用的点：
+  - **beforeunload 要按需挂、用完就摘**，不要一直挂着再在回调里判断。一直挂着的代价有两个：
+    浏览器可能不把页面放进往返缓存（bfcache）；判据稍宽一点，每次关页都要多点一下，用户会学会无视它。
+    判据定成「正文有字且和已保存版本不同」：只填了标题、正文被清空这两种存不进去，关页也不丢东西，所以不弹。
+  - **测「不该弹」之前，先证明测试环境「会弹」**。如果 CDP 的 `Page.reload` 根本不触发 beforeunload，
+    每一条「正常刷新不弹」的断言都会假通过。所以做了两个方向的注入：一直挂提醒，脚本报误弹；
+    从不挂提醒，脚本报该弹没弹。两个都红过，才说明两类断言都是真的。和 #9 学习 2 同一个教训。
+  验证：`vitest run` 33 文件 / 625 用例；`tsc` 0 错误；`test:diary` 14 项、`test:browser` 23 项全过。

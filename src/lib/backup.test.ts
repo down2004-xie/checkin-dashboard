@@ -11,7 +11,7 @@ import {
 } from './backup'
 
 function makeData(records: Record<string, string[]>): CheckInData {
-  return { version: DATA_VERSION, records, sites: [], todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+  return { version: DATA_VERSION, records, sites: [], todos: {}, diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
 }
 
 describe('createBackup / serializeBackup', () => {
@@ -161,8 +161,8 @@ describe('mergeData', () => {
   })
 
   it('合并产物采用当前数据版本', () => {
-    const a: CheckInData = { version: 1, records: {}, sites: [], todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
-    const b: CheckInData = { version: 2, records: {}, sites: [], todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+    const a: CheckInData = { version: 1, records: {}, sites: [], todos: {}, diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+    const b: CheckInData = { version: 2, records: {}, sites: [], todos: {}, diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
     expect(mergeData(a, b).version).toBe(DATA_VERSION)
   })
 
@@ -172,7 +172,7 @@ describe('mergeData', () => {
       records: {},
       sites: [{ id: 'a', name: 'A', url: 'https://a' }],
       todos: {},
-      targets: {}, preferences: { ...DEFAULT_PREFERENCES },
+      diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES },
     }
     const b: CheckInData = {
       version: 2,
@@ -182,7 +182,7 @@ describe('mergeData', () => {
         { id: 'a', name: 'A2', url: 'https://a2' }, // 与 a 里同 id，应被去重（保留 a 的）
       ],
       todos: {},
-      targets: {}, preferences: { ...DEFAULT_PREFERENCES },
+      diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES },
     }
     const merged = mergeData(a, b)
     expect(merged.sites.map((s) => s.id)).toEqual(['a', 'b'])
@@ -193,7 +193,7 @@ describe('mergeData 合并待办', () => {
   const todo = (id: string, text: string, done = false) => ({ id, text, done })
 
   function withTodos(todos: Record<string, { id: string; text: string; done: boolean }[]>) {
-    return { version: DATA_VERSION, records: {}, sites: [], todos, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+    return { version: DATA_VERSION, records: {}, sites: [], todos, diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
   }
 
   it('两边不同天的待办都保留', () => {
@@ -235,5 +235,71 @@ describe('mergeData 合并待办', () => {
     expect(result.ok).toBe(true)
     if (!result.ok) return
     expect(result.backup.data.todos).toEqual(data.todos)
+  })
+})
+
+describe('日记（v7）的备份与合并', () => {
+  const entry = (id: string, text: string, title?: string) => ({
+    id, text, ...(title !== undefined ? { title } : {}), createdAt: '2026-10-26T08:00:00.000Z',
+  })
+
+  function withDiary(diary: CheckInData['diary']): CheckInData {
+    return { version: DATA_VERSION, records: {}, sites: [], todos: {}, diary, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+  }
+
+  it('parseBackup 接受 v6 备份，并补出 diary: {}', () => {
+    const { diary: _drop, ...v6 } = { ...withDiary({}), version: 6 }
+    const result = parseBackup(JSON.stringify({ app: 'checkin-dashboard', exportedAt: '', data: v6 }))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.backup.data.version).toBe(DATA_VERSION)
+    expect(result.backup.data.diary).toEqual({})
+    expect(result.dropped).toBe(0)
+  })
+
+  it('v7 备份缺 diary → 拒绝', () => {
+    const { diary: _drop, ...broken } = withDiary({})
+    const result = parseBackup(JSON.stringify({ app: 'checkin-dashboard', exportedAt: '', data: broken }))
+    expect(result.ok).toBe(false)
+  })
+
+  it('端到端：导出再导入，日记一条不少（含标题、缩进和空行）', () => {
+    const data = withDiary({ '2026-10-26': [entry('d1', '  缩进\n\n空行', '周会'), entry('d2', '随手记')] })
+    const result = parseBackup(serializeBackup(createBackup(data)))
+    expect(result.ok).toBe(true)
+    if (!result.ok) return
+    expect(result.backup.data.diary).toEqual(data.diary)
+  })
+
+  it('两边不同天的日记按天并集', () => {
+    const a = withDiary({ '2026-10-25': [entry('d1', 'A')] })
+    const b = withDiary({ '2026-10-26': [entry('d2', 'B')] })
+    expect(mergeData(a, b).diary).toEqual({ '2026-10-25': [entry('d1', 'A')], '2026-10-26': [entry('d2', 'B')] })
+  })
+
+  it('只在备份（b）里有的日记不会丢 —— 新设备导入的核心场景', () => {
+    const local = withDiary({})
+    const backup = withDiary({ '2026-10-26': [entry('d1', '只在备份里')] })
+    expect(mergeData(local, backup).diary).toEqual(backup.diary)
+  })
+
+  it('同 id 两边内容不同时保留本机（a）的版本', () => {
+    const a = withDiary({ '2026-10-26': [entry('d1', '本机改过的')] })
+    const b = withDiary({ '2026-10-26': [entry('d1', '备份里的旧版')] })
+    expect(mergeData(a, b).diary['2026-10-26']).toEqual([entry('d1', '本机改过的')])
+  })
+
+  it('同一天不同 id 的两边日记都保留，本机在前', () => {
+    const a = withDiary({ '2026-10-26': [entry('d1', 'A')] })
+    const b = withDiary({ '2026-10-26': [entry('d2', 'B')] })
+    expect(mergeData(a, b).diary['2026-10-26'].map((item) => item.id)).toEqual(['d1', 'd2'])
+  })
+
+  it('合并不变异入参', () => {
+    const a = withDiary({ '2026-10-26': [entry('d1', 'A')] })
+    const b = withDiary({ '2026-10-26': [entry('d2', 'B')] })
+    mergeData(a, b)
+    expect(a.diary['2026-10-26']).toHaveLength(1)
+    expect(b.diary['2026-10-26']).toHaveLength(1)
   })
 })

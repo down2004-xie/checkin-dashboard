@@ -30,8 +30,8 @@ src/
 ├─ types.ts     全局类型定义（数据契约，改动牵连全局）
 ├─ hooks/       自定义 hooks，每个文件一个 hook
 ├─ lib/         纯函数，不 import React，必须可单测
-├─ components/  React 组件，每个文件一个组件；toolbox/ 是工具箱视图及其工具
-└─ styles/      tokens.css（设计变量）+ global/app/features/sakura/dashboard/toolbox.css
+├─ components/  React 组件，每个文件一个组件；toolbox/ 是工具箱视图及其工具；DiaryView.tsx 是日记视图
+└─ styles/      tokens.css（设计变量）+ global/app/features/sakura/dashboard/toolbox/diary.css
 
 fixtures/       开发期人工验收用的样本数据，不参与构建（不在 public/ 下）
 ```
@@ -49,8 +49,9 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `orphans.ts` | 孤儿记录（指向已删站点的 `records` 条目）的统计与清理。删除不自动发生，必须用户显式触发；只动 `records`，不碰 `targets` 快照 |
 | `daylight.ts` | 时段色板（深色 `PALETTES` + 亮色 `LIGHT_PALETTES`）+ `resolvePalette(theme, appearance)`：明暗与色相两个正交维度 |
 | `heatmap.ts` | 热力图网格 + 强度分级 + `groupByWeek` / `monthLabel` |
-| `sites.ts` | 站点筛选/排序（搜索、分类、状态、置顶优先）+ `moveNeighbor`（**按可见列表**算换位邻居）+ `canReorder`（拖拽落点是否合法） |
+| `sites.ts` | 站点筛选/排序（搜索、分类、状态、置顶优先）+ `moveNeighbor`（**按可见列表**算换位邻居）+ `canReorder`（拖拽落点是否合法）+ `pendingSites`（「一键打开未签到」的目标：未签且未暂停的**全部**站点，不吃筛选） |
 | `todo.ts` | 待办创建（`createTodo`，随机 UUID） |
+| `diary.ts` | 电子日记：创建（`createDiaryEntry`，随机 UUID + 创建时间，`now` 可注入）、同天按时间排序、全量关键字搜索（标题 + 正文，日期从新到旧）、有日记的日期列表、时间格式化（本地 `HH:mm`）、正文单行预览（按码点截断） |
 | `tween.ts` | 缓动函数（`easeOutCubic`） |
 | `site-form.ts` | URL 校验 + **站点身份 id 生成**（`siteIdFromUrl`） |
 | `bookmarks.ts` | 浏览器书签 HTML 解析 + 导入计划（去重、生成 id） |
@@ -106,14 +107,48 @@ reducer 的 `siteReordered` 用 splice 把被拖项插到目标位（`from < to`
 埋了根文件夹、嵌套文件夹、`javascript:` 小工具、`chrome://` 内部页、重复地址）。
 这也是为什么解析层被拆成两个函数：把不可测的部分圈到最小。
 
-**工具箱是「第二个视图」，不是第二个项目。** 顶层用 `view` state 在「签到 / 工具箱」
-之间条件渲染（项目刻意无路由）。工具目录是 `data/tools.ts` 里的静态数组，
+**工具箱是「第二个视图」，不是第二个项目。** 顶层用 `view` state 在「签到 / 日记 / 工具箱」
+三个视图之间条件渲染（项目刻意无路由）。工具目录是 `data/tools.ts` 里的静态数组，
 **不进 localStorage、不升数据版本**——工具是编译期确定的目录，不是用户数据。
 加一个工具只需：`data/tools.ts` 加一行 + 写组件 + 在 `ToolboxView` 里加一条 `React.lazy` 绑定
 并在 `<Suspense>` 内挂上（工具按需加载，每个工具一个独立 chunk，主视图不预载工具箱 JS）。
 `status` 三态：`ready`（可用，进面板）/ `soon`（开发中，点了给提示）/ `link`（外链）。
 新工具若含纯逻辑，逻辑一律进 `lib/`（如 `unit-convert.ts` / `countdown.ts`）并单测；
 组件只做渲染。**临时分享箱这类要后端的工具只能 `soon`**，纯静态站实现不了。
+
+**电子日记是「第三个视图」，和工具箱的性质正好相反：它是用户数据。** 工具是编译期目录、
+不进 localStorage；日记是用户写下的字，进 `CheckInData.diary`、进备份、升了数据版本（v7）。
+用途不限：实习日志、会议记录、普通日记都记在这里。
+
+- **按天归属、一天多条。** 和待办同构（`Record<DateKey, DiaryEntry[]>`），迁移、清洗、
+  备份合并都照抄待办那一套。一天多条是因为上午的会议和晚上的随笔混在一篇里会互相干扰。
+- **标题可选、正文必填。** 只有标题没有正文的条目没有内容；标题对会议有用、对随笔多余。
+  空标题统一不存这个字段（不存空串），否则「刚写完」和「刷新后」同一条日记长得不一样。
+- **纯文本，不存图片。** localStorage 每源约 5 MB，图片转 base64 几张就把配额写满，
+  之后所有写操作（包括签到）都会保存失败。纯文本 5 MB 够写几百万字。
+- **不参与进度环，也不触发樱花满开。** 和待办同一条理由：它是「今天记下的东西」，
+  不是「今天要完成的任务」，混进进度环会让「100%」的含义变模糊。
+- **所有写操作走 reducer 的四个 action**：`diaryAdded` / `diaryUpdated` / `diaryRemoved` /
+  `diaryRestored`（撤销删除）。组件不自己拼数据。
+
+**长文本写盘规则（改日记组件前必读）。** 不能在 textarea 的 `onChange` 里直接 dispatch：
+`commitAction` 每次都把**整份** `CheckInData`（站点、全部签到记录、待办、日记）
+`JSON.stringify` 后写进 localStorage，每敲一个字写一次，打字会卡，日记越多越卡。所以：
+
+1. 草稿只存在组件本地 state，停止输入约 600 ms 或失焦时才提交**一次** `diaryUpdated`。
+2. 保存失败**不清草稿**，界面显示「未保存」。日记丢了是心血，签到勾丢了只是少个勾。
+3. 草稿只在**开始编辑时**从数据初始化一次，之后不再跟着数据同步。原因：
+   `useCheckInStore` 在窗口 `focus` / `storage` 事件时会重新读盘刷新快照，
+   如果草稿跟着快照走，用户切个窗口回来，没保存的字就被旧数据覆盖了。
+4. **关页提醒只在「真的会丢东西」时出现**（`hooks/useLeaveGuard.ts` + `lib/diary.ts` 的 `hasUnsavedDraft`）。
+   判据：正文有字，且和已保存版本不同。也就是新建框写了字没点保存、编辑后自动保存还没完成、保存失败这三种情况。
+   正常关页（没写东西、自动保存已完成、只填了标题）**不弹**。
+   `beforeunload` 监听**按需挂、用完就摘**，不要改成「一直挂着、在回调里判断」：一直挂着会让浏览器
+   不把页面放进往返缓存（bfcache），而且判据一宽，每次关页都要多点一下，用户很快就学会无视它。
+   提示文字由浏览器决定，页面改不了。`test:diary` 两头都守着：该弹时弹，每一次正常 reload 都断言不弹。
+
+**保护模式下日记只读**：能看、能搜，不能写。和签到页的管理区同一条规则 ——
+保护模式意味着存储里有读不回来的数据，此时任何写入都可能覆盖掉用户还没救出来的原始内容。
 
 **分层铁律**：`lib/` 里的代码不允许 import React。一旦某个逻辑能在 lib 里写，
 就不要放进 hooks 或 components——因为纯函数好测试、好理解、面试好讲。
@@ -129,11 +164,11 @@ reducer 的 `siteReordered` 用 splice 把被拖项插到目标位（`from < to`
 
 ## 数据约定
 
-localStorage 存一份带版本号的 JSON。**当前版本 6**：
+localStorage 存一份带版本号的 JSON。**当前版本 7**：
 
 ```ts
 {
-  version: 6,
+  version: 7,
   sites: [                                // 站点定义，顺序即页面展示顺序
     { id: "bilibili-com", name: "哔哩哔哩", url: "https://...", category: "视频",
       paused: false, pinned: false }
@@ -146,6 +181,10 @@ localStorage 存一份带版本号的 JSON。**当前版本 6**：
   },
   targets: {                              // 日期 -> 当天的目标快照（v5 新增，见下）
     "2026-10-02": [{ id: "jd-com", name: "京东", url: "https://..." }]
+  },
+  diary: {                                // 日期 -> 当天日记，一天可多条（v7 新增，见下）
+    "2026-10-02": [{ id: "<uuid>", title: "周会纪要", text: "……",
+                     createdAt: "2026-10-02T02:30:00.000Z" }] // title / createdAt 可缺省
   },
   preferences: { theme: "auto", effects: "full", compact: false, appearance: "dark" } // v5 新增，v6 加 appearance
 }
@@ -183,6 +222,21 @@ localStorage 存一份带版本号的 JSON。**当前版本 6**：
   两者的组合在 `lib/daylight.ts` 的 `resolvePalette(theme, appearance)` 里落成一个具体色板。
   `useDaylight` 同时做两件事：给 `<html>` 写 `data-appearance`（切 CSS 变量组）、用 `resolvePalette` 选色板。
   **两者必须同时生效** —— 只换变量不换色板（或反之）会得到「浅底白字」的崩坏画面。
+
+**v7 相对 v6 的变化**：新增 `diary`（按天归属的电子日记，一天可多条）。
+
+- **纯加字段，不占版本梯子的档位。** 和 v4 的 `todos` 一样，不写 `if (version === 6)` 分支，
+  而是在 `migrate()` 末尾统一 `sanitizeDiary(candidate.diary)` 兜底 —— 这一步对 v1~v6 所有
+  老数据都成立（没有 `diary` 就归一化成 `{}`），写成分支反而让人误以为只有 v6 需要。
+  梯子（v1→v2→v3）只留给真正要重写历史的档位。
+- **正文比元数据值钱。** `id` / `text` 缺失或为空 → 整条丢弃（没有身份或没有内容，这条没法用）；
+  `title` / `createdAt` 缺失或类型不对 → 只是不写这个字段，**不丢整条**。
+  `droppedEntries` 用同一把尺子：只把「id、text 读不回来」的条目算作丢弃，
+  缺标题、缺时间都不算，否则一份只是缺元数据的老数据会把用户锁进保护模式（见 MY-ISSUES #13）。
+- **`createdAt` 只用于同一天内排序，不是身份。** 迁移刻意不给老条目补时间戳 ——
+  那是编数据（和「不伪造历史 targets 快照」同一条原则）。缺时间的条目排在当天最前。
+- **`mergeData` 已同步合并 `diary`**：按天 + 按 id 取并集，同 id 保留本机版本。
+  `dataProblem` 对 `version >= 7` 的数据要求 `diary` 是对象。
 
 ### 偏好校验的一条硬规则
 
@@ -232,8 +286,9 @@ v2 只能退回 `site-N`，而 N 取决于「当时哪些号没人占」——�
    只判断「那天有没有记录」，**会把它算进去**。验「历史有没有断」必须用
    `calcSiteStreak`（单站），用 `calcStreak` 会得到假通过。
 5. **`mergeData` 每加一个新字段都要同步合并**。合并只写 `records`/`sites` 时，
-   用户在新设备上导入备份，页面一切正常但待办（或目标快照）全部消失，
-   **且不报错**。`preferences` 刻意保留本机值；`targets` 按天取「本机的优先」。
+   用户在新设备上导入备份，页面一切正常但待办（或目标快照、日记）全部消失，
+   **且不报错**。`preferences` 刻意保留本机值；`targets` 按天取「本机的优先」；
+   `todos` 和 `diary` 都是按天 + 按 id 取并集，同 id 保留本机版本。
 6. **判定「要不要进保护模式」只能用 `droppedEntries`**，不能用「清洗前后长度差」。
    去重（`['a','a']`、同 id 站点）属于「内容还在」，把它算成丢弃会让用户一打开
    页面就被锁成只读，而数据其实没坏。这条踩过，见 MY-ISSUES #13；

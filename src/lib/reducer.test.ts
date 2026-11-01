@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import type { CheckInData, Site, Todo } from '../types'
+import type { CheckInData, DiaryEntry, Site, Todo } from '../types'
 import { DATA_VERSION, DEFAULT_PREFERENCES } from '../types'
 import { applyAction } from './reducer'
 import { siteIdFromUrl } from './site-form'
@@ -20,12 +20,12 @@ function makeData(
   records: Record<string, string[]>,
   sites = [SITE_A, SITE_B],
 ): CheckInData {
-  return { version: DATA_VERSION, records, sites, todos: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+  return { version: DATA_VERSION, records, sites, todos: {}, diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
 }
 
 /** 造只带待办的测试数据 —— 待办测试不关心站点和签到记录 */
 function makeTodoData(todos: Record<string, Todo[]>): CheckInData {
-  return { version: DATA_VERSION, records: {}, sites: [], todos, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
+  return { version: DATA_VERSION, records: {}, sites: [], todos, diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES } }
 }
 
 const TODO_A: Todo = { id: 't1', text: '写作业', done: false }
@@ -392,7 +392,7 @@ describe('todoRemoved', () => {
       records: { '2026-10-07': ['a'] },
       sites: [SITE_A],
       todos: { '2026-10-07': [TODO_A] },
-      targets: {}, preferences: { ...DEFAULT_PREFERENCES },
+      diary: {}, targets: {}, preferences: { ...DEFAULT_PREFERENCES },
     }
     const after = applyAction(before, { type: 'todoRemoved', day: '2026-10-07', id: 't1' })
     expect(after.records).toEqual({ '2026-10-07': ['a'] })
@@ -454,4 +454,195 @@ describe('siteReordered', () => {
     expect(after.targets).toBe(before.targets)
     expect(after.preferences).toBe(before.preferences)
   })
+})
+
+/* ---- 日记（v7） ---- */
+
+const DAY = '2026-10-26'
+
+function diaryEntry(id: string, text: string, title?: string): DiaryEntry {
+  return { id, text, ...(title !== undefined ? { title } : {}), createdAt: '2026-10-26T08:00:00.000Z' }
+}
+
+/** 造带日记的测试数据，顺带放一份 todos / records，用来确认日记操作不碰它们 */
+function makeDiaryData(diary: Record<string, DiaryEntry[]>): CheckInData {
+  return {
+    ...makeData({ [DAY]: ['a'] }),
+    todos: { [DAY]: [{ id: 't1', text: '买牛奶', done: false }] },
+    diary,
+  }
+}
+
+describe('diaryAdded', () => {
+  it('加到当天末尾', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '第一条')] })
+    const next = applyAction(data, { type: 'diaryAdded', day: DAY, entry: diaryEntry('d2', '第二条') })
+    expect(next.diary[DAY].map((entry) => entry.id)).toEqual(['d1', 'd2'])
+  })
+
+  it('当天还没有日记时新建这一天', () => {
+    const next = applyAction(makeDiaryData({}), { type: 'diaryAdded', day: DAY, entry: diaryEntry('d1', '正文') })
+    expect(next.diary).toEqual({ [DAY]: [diaryEntry('d1', '正文')] })
+  })
+
+  it('空正文或纯空白正文 → 返回同一引用', () => {
+    const data = makeDiaryData({})
+    expect(applyAction(data, { type: 'diaryAdded', day: DAY, entry: diaryEntry('d1', '') })).toBe(data)
+    expect(applyAction(data, { type: 'diaryAdded', day: DAY, entry: diaryEntry('d1', ' \n\t ') })).toBe(data)
+  })
+
+  it('重复 id 幂等：返回同一引用', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文')] })
+    expect(applyAction(data, { type: 'diaryAdded', day: DAY, entry: diaryEntry('d1', '另一段') })).toBe(data)
+  })
+
+  it('标题 trim；空标题删掉 title 字段', () => {
+    const data = makeDiaryData({})
+    const trimmed = applyAction(data, { type: 'diaryAdded', day: DAY, entry: diaryEntry('d1', '正文', '  周会  ') })
+    expect(trimmed.diary[DAY][0].title).toBe('周会')
+    const blank = applyAction(data, { type: 'diaryAdded', day: DAY, entry: diaryEntry('d1', '正文', '   ') })
+    expect('title' in blank.diary[DAY][0]).toBe(false)
+  })
+
+  it('正文原样保存，不 trim 缩进和空行', () => {
+    const next = applyAction(makeDiaryData({}), { type: 'diaryAdded', day: DAY, entry: diaryEntry('d1', '  缩进\n\n') })
+    expect(next.diary[DAY][0].text).toBe('  缩进\n\n')
+  })
+})
+describe('diaryUpdated', () => {
+  it('改正文和标题', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文', '原标题')] })
+    const next = applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'd1', patch: { text: '新正文', title: '新标题' } })
+    expect(next.diary[DAY][0]).toEqual(diaryEntry('d1', '新正文', '新标题'))
+  })
+
+  it('只改正文时标题和 createdAt 不变', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文', '标题')] })
+    const next = applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'd1', patch: { text: '新正文' } })
+    expect(next.diary[DAY][0]).toEqual(diaryEntry('d1', '新正文', '标题'))
+  })
+
+  it('把标题改成空白 → 删掉 title 字段', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文', '标题')] })
+    const next = applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'd1', patch: { title: '  ' } })
+    expect('title' in next.diary[DAY][0]).toBe(false)
+  })
+
+  it('标题会 trim', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文')] })
+    const next = applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'd1', patch: { title: '  会议  ' } })
+    expect(next.diary[DAY][0].title).toBe('会议')
+  })
+
+  it('正文改成空或纯空白 → 返回同一引用（想删请走删除）', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文')] })
+    expect(applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'd1', patch: { text: '' } })).toBe(data)
+    expect(applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'd1', patch: { text: '  \n ' } })).toBe(data)
+  })
+
+  it('内容没变 → 返回同一引用（storage 不重写）', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文', '标题')] })
+    expect(applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'd1', patch: { text: '原文', title: '标题' } })).toBe(data)
+    // 标题前后多了空格，trim 后和原来一样，也算没变
+    expect(applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'd1', patch: { title: ' 标题 ' } })).toBe(data)
+    expect(applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'd1', patch: {} })).toBe(data)
+  })
+
+  it('找不到这一天或这条 → 返回同一引用', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文')] })
+    expect(applyAction(data, { type: 'diaryUpdated', day: '2026-10-25', id: 'd1', patch: { text: '新' } })).toBe(data)
+    expect(applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'missing', patch: { text: '新' } })).toBe(data)
+  })
+
+  it('只替换命中的那一条，其他条目引用不变', () => {
+    const other = diaryEntry('d2', '另一条')
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文'), other] })
+    const next = applyAction(data, { type: 'diaryUpdated', day: DAY, id: 'd1', patch: { text: '新' } })
+    expect(next.diary[DAY][1]).toBe(other)
+  })
+})
+
+describe('diaryRemoved', () => {
+  it('删掉指定条目', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '一'), diaryEntry('d2', '二')] })
+    const next = applyAction(data, { type: 'diaryRemoved', day: DAY, id: 'd1' })
+    expect(next.diary[DAY].map((entry) => entry.id)).toEqual(['d2'])
+  })
+
+  it('删掉当天最后一条 → 删掉这个天 key，其他天不受影响', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '一')], '2026-10-25': [diaryEntry('d0', '昨天')] })
+    const next = applyAction(data, { type: 'diaryRemoved', day: DAY, id: 'd1' })
+    expect(DAY in next.diary).toBe(false)
+    expect(next.diary['2026-10-25']).toHaveLength(1)
+  })
+
+  it('找不到 → 返回同一引用', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '一')] })
+    expect(applyAction(data, { type: 'diaryRemoved', day: DAY, id: 'missing' })).toBe(data)
+    expect(applyAction(data, { type: 'diaryRemoved', day: '2026-10-25', id: 'd1' })).toBe(data)
+  })
+})
+describe('diaryRestored', () => {
+  it('撤销删除：放回原来的位置', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '一'), diaryEntry('d3', '三')] })
+    const next = applyAction(data, { type: 'diaryRestored', day: DAY, entry: diaryEntry('d2', '二'), index: 1 })
+    expect(next.diary[DAY].map((entry) => entry.id)).toEqual(['d1', 'd2', 'd3'])
+  })
+
+  it('index 越界 → 放到末尾', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '一')] })
+    const next = applyAction(data, { type: 'diaryRestored', day: DAY, entry: diaryEntry('d2', '二'), index: 99 })
+    expect(next.diary[DAY].map((entry) => entry.id)).toEqual(['d1', 'd2'])
+  })
+
+  it('负数 index → 放到开头', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '一')] })
+    const next = applyAction(data, { type: 'diaryRestored', day: DAY, entry: diaryEntry('d0', '零'), index: -1 })
+    expect(next.diary[DAY].map((entry) => entry.id)).toEqual(['d0', 'd1'])
+  })
+
+  it('这一天已经被删空时也能恢复', () => {
+    const next = applyAction(makeDiaryData({}), { type: 'diaryRestored', day: DAY, entry: diaryEntry('d1', '一'), index: 0 })
+    expect(next.diary).toEqual({ [DAY]: [diaryEntry('d1', '一')] })
+  })
+
+  it('同 id 已存在 → 幂等，返回同一引用', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '一')] })
+    expect(applyAction(data, { type: 'diaryRestored', day: DAY, entry: diaryEntry('d1', '一'), index: 0 })).toBe(data)
+  })
+
+  it('删除后恢复，回到删除前的样子', () => {
+    const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '一'), diaryEntry('d2', '二'), diaryEntry('d3', '三')] })
+    const removed = applyAction(data, { type: 'diaryRemoved', day: DAY, id: 'd2' })
+    const restored = applyAction(removed, { type: 'diaryRestored', day: DAY, entry: data.diary[DAY][1], index: 1 })
+    expect(restored.diary).toEqual(data.diary)
+  })
+})
+
+describe('日记操作的隔离性与不可变', () => {
+  const actions = [
+    { type: 'diaryAdded', day: DAY, entry: diaryEntry('d2', '新') },
+    { type: 'diaryUpdated', day: DAY, id: 'd1', patch: { text: '改', title: '标题' } },
+    { type: 'diaryRemoved', day: DAY, id: 'd1' },
+    { type: 'diaryRestored', day: DAY, entry: diaryEntry('d0', '恢复'), index: 0 },
+  ] as const
+
+  for (const action of actions) {
+    it(`${action.type} 不碰 todos / records / sites / targets 的引用`, () => {
+      const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文')] })
+      const next = applyAction(data, action)
+      expect(next).not.toBe(data)
+      expect(next.todos).toBe(data.todos)
+      expect(next.records).toBe(data.records)
+      expect(next.sites).toBe(data.sites)
+      expect(next.targets).toBe(data.targets)
+    })
+
+    it(`${action.type} 不变异入参`, () => {
+      const data = makeDiaryData({ [DAY]: [diaryEntry('d1', '原文')] })
+      const before = JSON.stringify(data)
+      applyAction(data, action)
+      expect(JSON.stringify(data)).toBe(before)
+    })
+  }
 })

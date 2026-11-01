@@ -86,7 +86,7 @@ try {
   await page.send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 1000, deviceScaleFactor: 1, mobile: false })
   await page.send('Page.navigate', { url: origin })
   await ready()
-  await waitFor(() => page.evaluate(`${store}?.version === 6 && Object.keys(${store}.targets).length > 0`), 'initial target snapshot not saved')
+  await waitFor(() => page.evaluate(`${store}?.version === 7 && Object.keys(${store}.targets).length > 0`), 'initial target snapshot not saved')
   const today = await page.evaluate(`${store} && Object.keys(${store}.targets).sort().at(-1)`)
   assert(today, 'no today key')
 
