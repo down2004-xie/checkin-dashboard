@@ -40,11 +40,13 @@ async function connect(addr) {
   ws.addEventListener('message', (ev) => {
     const m = JSON.parse(ev.data)
     if (m.method === 'Runtime.exceptionThrown') failures.push(m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text)
-    // 关页提醒（beforeunload）弹出时记一笔，并立刻点「取消」留在页面 —— 模拟用户看到提醒后反悔。
-    // 不处理的话页面会一直卡在对话框上，后面所有命令都超时
+    // 浏览器原生对话框弹出时记一笔，并立刻替用户点按钮。默认点「取消」留在原处（模拟看到提醒后反悔）；
+    // 把 acceptDialogs 设成 true 就点「确定」。不处理的话页面会一直卡在对话框上，后面所有命令都超时。
+    // 关页提醒的类型是 'beforeunload'，切视图确认（window.confirm）的类型是 'confirm'
     if (m.method === 'Page.javascriptDialogOpening') {
       dialogs.push(m.params.type)
-      send('Page.handleJavaScriptDialog', { accept: false }).catch(() => {})
+      dialogMessages.push(m.params.message)
+      send('Page.handleJavaScriptDialog', { accept: acceptDialogs }).catch(() => {})
     }
     const w = pending.get(m.id); if (!w) return; clearTimeout(w.t); pending.delete(m.id)
     m.error ? w.r(new Error(JSON.stringify(m.error))) : w.d(m.result)
@@ -67,8 +69,11 @@ const setValue = (sel, value) => page.evaluate(`(() => { const el = document.que
 const text = (sel) => page.evaluate(`document.querySelector(${q(sel)})?.textContent ?? null`)
 const panelTitle = () => text('.diary__panel-title')
 const openDiary = async () => { await clickText('日记'); await waitFor(() => page.evaluate("!!document.querySelector('.diary')"), 'diary view not shown'); await delay(100) }
-/** 弹出过的对话框类型，按顺序记录。关页提醒的类型是 'beforeunload' */
+/** 弹出过的对话框类型，按顺序记录。关页提醒的类型是 'beforeunload'，切视图确认是 'confirm' */
 const dialogs = []
+const dialogMessages = []
+/** 对话框弹出时替用户点「确定」（true）还是「取消」（false） */
+let acceptDialogs = false
 // 正常刷新：断言**没有**弹关页提醒。脚本里每一次 reload 都顺带守着「正常关页不打扰」
 const reload = async () => {
   const before = dialogs.length
@@ -183,6 +188,41 @@ try {
   await setValue('input[aria-label="日记标题"]', '')
   record('关页提醒（新建框）：正文有字未保存时弹、取消后草稿还在；保存失败后仍弹；只有标题或正文纯空白时不弹')
 
+  // 3c. 切视图确认（新建框）。目标页**从导航栏现读**，不写死「签到 / 工具箱」——
+  //     以后加了新页面，这一步自动把它也测到
+  const navTo = (label) => page.evaluate(`(() => { const el = [...document.querySelectorAll('.view-switch__btn')].find(b => b.textContent.trim() === ${q(label)}); if (!el) throw new Error('missing nav ' + ${q(label)}); el.click() })()`)
+  const onDiary = () => page.evaluate("!!document.querySelector('.diary')")
+  const otherViews = await page.evaluate("[...document.querySelectorAll('.view-switch__btn')].map(b => b.textContent.trim()).filter(t => t !== '日记')")
+  assert.ok(otherViews.length >= 2, 'expected at least 签到 and 工具箱 besides 日记: ' + JSON.stringify(otherViews))
+  // 没有草稿：去哪都不弹
+  for (const label of otherViews) {
+    const before = dialogs.length
+    await navTo(label)
+    await waitFor(async () => !(await onDiary()), `could not leave diary to ${label} without a draft`)
+    assert.equal(dialogs.length, before, `unexpected confirm when leaving to ${label} with no draft`)
+    await openDiary()
+  }
+  // 有草稿：去哪都弹；点「取消」留在日记页，草稿原样还在
+  await setValue(composer, '切视图前没保存的草稿')
+  for (const label of otherViews) {
+    const before = dialogs.length
+    await navTo(label)
+    await delay(150)
+    assert.deepEqual(dialogs.slice(before), ['confirm'], `leaving to ${label} with a draft must confirm`)
+    assert.match(dialogMessages[dialogMessages.length - 1], /没保存/)
+    assert.equal(await onDiary(), true, `cancelled confirm still left diary for ${label}`)
+    assert.equal(await page.evaluate(`document.querySelector(${q(composer)}).value`), '切视图前没保存的草稿', `draft lost after cancelling confirm to ${label}`)
+  }
+  // 点「确定」：真的离开，草稿按用户的选择丢弃；名单随组件卸载撤销，之后刷新、切换都不再弹
+  acceptDialogs = true
+  await navTo(otherViews[0])
+  await waitFor(async () => !(await onDiary()), 'accepting the confirm did not leave diary')
+  acceptDialogs = false
+  await reload() // 内部断言不弹 beforeunload：组件卸载后关页提醒也摘掉了
+  await openDiary()
+  assert.equal(await page.evaluate(`document.querySelector(${q(composer)}).value`), '', 'discarded draft came back')
+  record(`切视图确认（新建框）：有草稿时去 ${otherViews.join(' / ')} 都弹，取消留下且草稿还在，确定才离开；没草稿不弹`)
+
   // 4. 刷新后仍在
   await reload()
   await openDiary()
@@ -227,6 +267,38 @@ try {
   await clickText('完成')
   await waitFor(() => page.evaluate(`!document.querySelector('textarea[aria-label="编辑日记正文"]')`), 'editor did not close')
   record('编辑时把正文清空：不写盘，提示「正文不能为空」，「完成」禁用')
+
+  // 6b. 切视图确认（编辑已有条目）
+  const editor = 'textarea[aria-label="编辑日记正文"]'
+  const savedText = '讨论了 Diary 功能（已修改）'
+  // 正常情况：停笔不到 600ms 就切走 → 不弹，卸载时自动补交，回来是新内容
+  await click('button[aria-label="编辑日记 周会纪要"]')
+  await setValue(editor, '切走前补交的内容')
+  let before = dialogs.length
+  await navTo(otherViews[0])
+  await waitFor(async () => !(await onDiary()), 'could not leave diary while editing')
+  assert.equal(dialogs.length, before, 'editing an existing entry must not confirm on a normal view switch')
+  await waitFor(async () => (await readStore()).diary[today][0].text === '切走前补交的内容', 'unmount flush did not save the edit')
+  await openDiary()
+  assert.equal(await text('.diary-entry__text'), '切走前补交的内容')
+  // 保存失败过：切视图要弹 —— 即使失败后又接着打了字（状态从「未保存」变回「有改动」）
+  await click('button[aria-label="编辑日记 周会纪要"]')
+  await page.evaluate(`(() => { window.__realSetItem = Storage.prototype.setItem; Storage.prototype.setItem = function () { throw new DOMException('quota', 'QuotaExceededError') } })()`)
+  await setValue(editor, savedText)
+  await waitFor(async () => (await text('.diary-entry .diary__status')) === '未保存', 'failed autosave not shown')
+  await setValue(editor, savedText + '…') // 失败后接着打字
+  before = dialogs.length
+  await navTo(otherViews[0])
+  await delay(150)
+  assert.deepEqual(dialogs.slice(before), ['confirm'], 'must confirm when leaving after a failed save')
+  assert.equal(await onDiary(), true, 'cancelled confirm still left diary')
+  // 存储恢复后改回原文、点「完成」，后面的步骤依赖这条的正文
+  await page.evaluate('Storage.prototype.setItem = window.__realSetItem')
+  await setValue(editor, savedText)
+  await waitFor(async () => (await readStore()).diary[today][0].text === savedText, 'save after storage recovered failed')
+  await clickText('完成')
+  await waitFor(() => page.evaluate(`!document.querySelector(${q(editor)})`), 'editor did not close')
+  record('切视图确认（编辑）：正常切走不弹、卸载时自动补交；保存失败过（即使之后又打了字）切走要弹')
 
   // 7. 搜索：大小写不敏感；从别的日期点结果跳回当天并高亮
   await clickText('← 前一天')

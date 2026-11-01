@@ -36,6 +36,12 @@ export function DiaryEntryItem({ entry, readOnly, focused, onSave, onRemove }: D
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState<Draft>({ title: '', text: '' })
   const [state, setState] = useState<SaveState>('idle')
+  /**
+   * 「上次成功保存之后，有没有失败过」。和 state 分开记：失败后用户接着打字，
+   * update() 会把 state 改回 'idle'（界面显示「有改动」），但存储问题多半还在。
+   * 只看 state 的话，这时切视图会放行，卸载时补交再失败，草稿就没了。
+   */
+  const [failedSinceSave, setFailedSinceSave] = useState(false)
   const itemRef = useRef<HTMLElement>(null)
 
   // 下面几个 ref 给定时器、失焦、卸载这些「拿不到最新 state 的回调」用
@@ -60,7 +66,10 @@ export function DiaryEntryItem({ entry, readOnly, focused, onSave, onRemove }: D
     const ok = await onSaveRef.current(snapshot)
     if (ok) savedRef.current = snapshot
     // 只让最后一次提交决定状态，避免慢的旧请求把新状态盖掉
-    if (id === seq.current) setState(ok ? (isDirty() ? 'idle' : 'saved') : 'failed')
+    if (id === seq.current) {
+      setState(ok ? (isDirty() ? 'idle' : 'saved') : 'failed')
+      setFailedSinceSave(!ok)
+    }
     return ok
   }
 
@@ -80,6 +89,7 @@ export function DiaryEntryItem({ entry, readOnly, focused, onSave, onRemove }: D
     editingRef.current = true
     setDraft(initial)
     setState('idle')
+    setFailedSinceSave(false)
     setEditing(true)
   }
 
@@ -105,10 +115,15 @@ export function DiaryEntryItem({ entry, readOnly, focused, onSave, onRemove }: D
     // commit / isDirty 只读 ref，挂一次就够
   }, [])
 
-  // 关页提醒只在「草稿和已保存版本不同」时挂：停笔等自动保存的 600ms、保存进行中、保存失败。
-  // 自动保存一成功 savedRef 就追上草稿，提醒随之摘掉，正常关页不会弹。
+  // 两种离开的风险不一样，所以分开判断：
+  // - 关页：页面马上被销毁，卸载时补交的那次异步保存浏览器不保证等完，所以只要草稿和
+  //   已保存版本不同就提醒（停笔等自动保存的 600ms、保存进行中、保存失败）。
+  // - 切视图：页面还活着，卸载时补交的保存能跑完（见下面卸载时的 flush），正常情况下不丢字，
+  //   不需要打扰用户。只有**上次成功保存后失败过**才拦 —— 补交大概率还会失败，切走草稿就没了。
+  // 自动保存一成功 savedRef 就追上草稿，提醒随之摘掉。
   // savedRef 在 commit 成功后、setState 之前更新，所以这里在渲染时读到的总是最新值。
-  useLeaveGuard(editing && hasUnsavedDraft(draft, savedRef.current))
+  const unsaved = editing && hasUnsavedDraft(draft, savedRef.current)
+  useLeaveGuard({ pageClose: unsaved, viewSwitch: unsaved && failedSinceSave })
 
   useEffect(() => {
     if (focused) itemRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' })

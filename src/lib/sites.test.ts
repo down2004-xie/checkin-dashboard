@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import type { Site } from '../types'
-import { canReorder, filterSites, pendingSites } from './sites'
+import { canReorder, filterSites, nextBatch, pendingSites } from './sites'
 
 const NORMAL_A: Site = { id: 'a', name: 'A', url: 'https://a' }
 const NORMAL_B: Site = { id: 'b', name: 'B', url: 'https://b' }
@@ -77,5 +77,40 @@ describe('pendingSites', () => {
 
   it('不受孤儿记录影响（checked 里有已删站点的 id）', () => {
     expect(pendingSites([NORMAL_A], new Set(['ghost'])).map((site) => site.id)).toEqual(['a'])
+  })
+})
+
+describe('nextBatch', () => {
+  const site = (n: number): Site => ({ id: 's' + n, name: 'S' + n, url: 'https://s' + n })
+  const TWELVE = Array.from({ length: 12 }, (_, i) => site(i + 1))
+  const ids = (list: Site[]) => list.map((s) => s.id)
+
+  it('第一批：按顺序取前 size 个', () => {
+    expect(nextBatch(TWELVE, new Set(), 5)).toEqual({ batch: TWELVE.slice(0, 5), restart: false })
+  })
+
+  it('跳过已打开的，接着往后取', () => {
+    expect(ids(nextBatch(TWELVE, new Set(ids(TWELVE.slice(0, 5))), 5).batch)).toEqual(['s6', 's7', 's8', 's9', 's10'])
+  })
+
+  it('最后一批不足 size 个时只给剩下的', () => {
+    expect(ids(nextBatch(TWELVE, new Set(ids(TWELVE.slice(0, 10))), 5).batch)).toEqual(['s11', 's12'])
+  })
+
+  it('被拦截的没记进 opened → 下一次从它开始（不跳过）', () => {
+    // 第一批只有 s1 真打开了，s2..s5 被拦截
+    expect(ids(nextBatch(TWELVE, new Set(['s1']), 5).batch)).toEqual(['s2', 's3', 's4', 's5', 's6'])
+  })
+
+  it('全部开过一轮 → restart，从头再取', () => {
+    expect(nextBatch(TWELVE, new Set(ids(TWELVE)), 5)).toEqual({ batch: TWELVE.slice(0, 5), restart: true })
+  })
+
+  it('opened 里有已签掉（不在 pending 里）的 id 不影响结果', () => {
+    expect(ids(nextBatch(TWELVE.slice(2), new Set(['s1', 's2', 's3']), 5).batch)).toEqual(['s4', 's5', 's6', 's7', 's8'])
+  })
+
+  it('pending 为空 → 空批次', () => {
+    expect(nextBatch([], new Set(), 5).batch).toEqual([])
   })
 })

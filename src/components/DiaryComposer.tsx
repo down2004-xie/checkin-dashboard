@@ -24,9 +24,11 @@ export function DiaryComposer({ day, today, readOnly, onAdd }: DiaryComposerProp
   const [saving, setSaving] = useState(false)
   const [failed, setFailed] = useState(false)
   const canSave = !readOnly && !saving && text.trim() !== ''
-  // 新建框不自动保存，正文写了字没点保存就关页会全丢 —— 这是最需要提醒的地方。
+  // 新建框不自动保存，正文写了字没点保存，关页或切走视图（组件卸载、本地 state 消失）都会全丢 ——
+  // 这是最需要提醒的地方，所以两种离开都拦。
   // 保存成功会清空表单，提醒随之摘掉；保存失败草稿还在，提醒保留。
-  useLeaveGuard(hasUnsavedDraft({ title, text }, { title: '', text: '' }))
+  const unsaved = hasUnsavedDraft({ title, text }, { title: '', text: '' })
+  useLeaveGuard({ pageClose: unsaved, viewSwitch: unsaved })
 
   const save = async () => {
     if (!canSave) return

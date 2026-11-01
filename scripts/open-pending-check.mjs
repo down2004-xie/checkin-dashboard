@@ -11,8 +11,10 @@
  *   1. 按钮数字 = 未签到且未暂停的站点数（已签、已暂停都不算）
  *   2. 点击后按网格顺序逐个 window.open，且每个新窗口的 opener 被置 null
  *   3. 不受当前筛选影响（筛到某个分类，数字和打开的站点不变）
- *   4. 部分被拦截（open 返回 null）→ 提示「已打开 X 个，Y 个被浏览器拦截」
- *   5. 超过 10 个时先 confirm，取消则一个都不开
+ *   4. 部分被拦截（open 返回 null）→ 提示「已打开 X 个，Y 个被浏览器拦截」，
+ *      再点一次从被拦的那个继续（不跳过、不重复开已开成的）
+ *   5. 分批：12 个站每次最多开 5 个（5 → 5 → 2），按钮文字随进度变；
+ *      中途签掉一个，剩余数跟着少；全部开过一轮后变成「重新打开」从头开
  *   6. 全部签完 → 按钮消失
  *
  * 前置：`dist/` 已经构建（本脚本只跑 `vite preview`，不负责 build）。
@@ -67,7 +69,7 @@ const store = `JSON.parse(localStorage.getItem('${KEY}'))`
 const todayExpr = "(() => { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0') })()"
 const ready = () => waitFor(() => page.evaluate("!!document.querySelector('.dashboard-controls') && !document.querySelector('.dashboard-controls').disabled"), 'page not ready')
 const record = (m) => console.log('PASS ' + m)
-const findButton = "[...document.querySelectorAll('.open-pending button')].find((b) => b.textContent.startsWith('一键打开未签到'))"
+const findButton = "document.querySelector('.open-pending > button')"
 const buttonText = () => page.evaluate(`${findButton}?.textContent ?? null`)
 
 /** 改存储再刷新：模拟「用户之前已签了某些站 / 暂停了某些站」 */
@@ -87,6 +89,7 @@ const stubOpen = (allow) => page.evaluate(`(() => {
   }
 })()`)
 const opened = () => page.evaluate('window.__opened.map((o) => ({ url: o.url, target: o.target, features: o.features, openerCleared: o.tab.opener === null }))')
+const openedUrls = async () => (await opened()).map((o) => o.url)
 const click = () => page.evaluate(`${findButton}.click()`)
 const noticeText = () => page.evaluate("document.querySelector('.open-pending .notice')?.textContent ?? null")
 
@@ -121,6 +124,8 @@ try {
   assert.ok(all.every((o) => o.openerCleared), 'every opened tab must have opener cleared')
   assert.equal(await noticeText(), null, 'no blocked notice when all tabs opened')
   record('按网格顺序打开 4 个站，每个新窗口的 opener 都被置 null，全部放行时无提示')
+  assert.equal(await buttonText(), '重新打开未签到（4）')
+  record('全部开过一轮后按钮变成「重新打开未签到（4）」')
 
   const stored = await page.evaluate(`${store}.records[${todayExpr}]`)
   assert.deepEqual(stored, ['jd-com'], 'opening must not check anything in: ' + JSON.stringify(stored))
@@ -130,40 +135,70 @@ try {
   await page.evaluate(`[...document.querySelectorAll('.filter .chip')].find((b) => b.textContent === '开发').click()`)
   await delay(150)
   assert.equal(await page.evaluate("document.querySelectorAll('[data-site-id]').length"), 1, 'filter should leave 1 card visible')
-  assert.equal(await buttonText(), '一键打开未签到（4）')
+  assert.equal(await buttonText(), '重新打开未签到（4）')
   await stubOpen(99)
   await click()
   await delay(100)
   assert.equal((await opened()).length, 4, 'filtered view should still open all pending sites')
-  record('筛到「开发」只剩 1 张卡时，按钮仍是 4 且打开全部 4 个')
+  record('筛到「开发」只剩 1 张卡时，重新打开仍是全部 4 个（不吃筛选）')
 
-  /* ---------- 4. 部分被拦截 → 提示 ---------- */
+  /* ---------- 4. 部分被拦截 → 提示 → 再点从被拦的那个继续 ---------- */
+  await page.send('Page.reload') // 清掉组件里「本次会话已打开」的内存状态
+  await delay(300)
+  await ready()
+  assert.equal(await buttonText(), '一键打开未签到（4）', 'opened state must not survive reload')
   await stubOpen(1)
   await click()
   await delay(150)
   const blockedNotice = await noticeText()
   assert.ok(blockedNotice?.includes('已打开 1 个，3 个被浏览器拦截'), 'blocked notice: ' + blockedNotice)
   record(`部分被拦截时提示：「${blockedNotice.replace('×', '').trim()}」`)
+  assert.equal(await buttonText(), '打开下一批（剩 3 个）')
+  await stubOpen(99)
+  await click()
+  await delay(100)
+  assert.deepEqual(await openedUrls(), ['https://music.163.com', 'https://www.smzdm.com', 'https://github.com'], 'retry must resume from the blocked ones')
+  assert.equal(await noticeText(), null, 'blocked notice clears after a clean batch')
+  record('允许弹窗后再点：只开被拦的 3 个，已开成的 bilibili 不重复开，提示消失')
 
-  /* ---------- 5. 超过 10 个 → confirm，取消则不开 ---------- */
+  /* ---------- 5. 分批：12 个站 → 5 / 5 / 2 → 重新打开 ---------- */
   await seed(`(data, today) => {
     data.records[today] = []
     for (let i = 1; i <= 6; i += 1) data.sites.push({ id: 's' + i + '-example-com', name: 'S' + i, url: 'https://s' + i + '.example.com', category: '测试' })
     data.sites.forEach((s) => { s.paused = false })
   }`)
   await ready()
-  assert.equal(await buttonText(), '一键打开未签到（12）')
-  await stubOpen(99)
-  await page.evaluate('window.__confirms = []; window.confirm = (msg) => { window.__confirms.push(msg); return false }')
-  await click()
-  await delay(100)
-  assert.deepEqual(await page.evaluate('window.__confirms'), ['将打开 12 个标签页，确定吗？'])
-  assert.equal((await opened()).length, 0, 'cancelled confirm must open nothing')
-  await page.evaluate('window.confirm = () => true')
-  await click()
-  await delay(100)
-  assert.equal((await opened()).length, 12)
-  record('12 个站点时先确认：取消 → 0 个，确认 → 12 个')
+  const order = await page.evaluate(`${store}.sites.map((s) => s.url)`)
+  assert.equal(order.length, 12, 'seeded 12 sites')
+  assert.equal(await buttonText(), '一键打开未签到（先开 5 个，共 12 个）')
+  await page.evaluate('window.__confirms = []; window.confirm = (msg) => { window.__confirms.push(msg); return true }')
+
+  await stubOpen(99); await click(); await delay(100)
+  assert.deepEqual(await openedUrls(), order.slice(0, 5))
+  assert.equal(await buttonText(), '打开下一批（剩 7 个）')
+  record('12 个站点：第 1 次点击只开前 5 个，按钮变「打开下一批（剩 7 个）」')
+
+  // 中途签掉一个还没开的站（第 8 个）：剩余数应 7 → 6，下一批跳过它
+  const eighth = await page.evaluate(`${store}.sites[7].id`)
+  await page.evaluate(`document.querySelector('[data-site-id="${eighth}"] .card__toggle').click()`)
+  await waitFor(() => page.evaluate(`${store}.records[${todayExpr}].includes('${eighth}')`), 'check-in did not persist')
+  await delay(150)
+  assert.equal(await buttonText(), '打开下一批（剩 6 个）')
+  record('中途签掉一个未开的站：剩余数 7 → 6')
+
+  await stubOpen(99); await click(); await delay(100)
+  assert.deepEqual(await openedUrls(), [...order.slice(5, 7), ...order.slice(8, 11)])
+  assert.equal(await buttonText(), '打开下一批（剩 1 个）')
+  await stubOpen(99); await click(); await delay(100)
+  assert.deepEqual(await openedUrls(), order.slice(11))
+  record('第 2 批开 5 个（跳过已签的那个）、第 3 批开最后 1 个')
+
+  assert.equal(await buttonText(), '重新打开未签到（11）')
+  await stubOpen(99); await click(); await delay(100)
+  assert.deepEqual(await openedUrls(), order.slice(0, 5))
+  assert.equal(await buttonText(), '打开下一批（剩 6 个）')
+  assert.deepEqual(await page.evaluate('window.__confirms'), [], 'batching replaces the old confirm dialog')
+  record('全部开过后「重新打开未签到（11）」从头再开前 5 个；整个过程不弹 confirm')
 
   /* ---------- 6. 全部签完 → 按钮消失 ---------- */
   await seed(`(data, today) => { data.records[today] = data.sites.map((s) => s.id) }`)

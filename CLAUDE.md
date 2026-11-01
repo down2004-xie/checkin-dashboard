@@ -49,7 +49,7 @@ fixtures/       开发期人工验收用的样本数据，不参与构建（不�
 | `orphans.ts` | 孤儿记录（指向已删站点的 `records` 条目）的统计与清理。删除不自动发生，必须用户显式触发；只动 `records`，不碰 `targets` 快照 |
 | `daylight.ts` | 时段色板（深色 `PALETTES` + 亮色 `LIGHT_PALETTES`）+ `resolvePalette(theme, appearance)`：明暗与色相两个正交维度 |
 | `heatmap.ts` | 热力图网格 + 强度分级 + `groupByWeek` / `monthLabel` |
-| `sites.ts` | 站点筛选/排序（搜索、分类、状态、置顶优先）+ `moveNeighbor`（**按可见列表**算换位邻居）+ `canReorder`（拖拽落点是否合法）+ `pendingSites`（「一键打开未签到」的目标：未签且未暂停的**全部**站点，不吃筛选） |
+| `sites.ts` | 站点筛选/排序（搜索、分类、状态、置顶优先）+ `moveNeighbor`（**按可见列表**算换位邻居）+ `canReorder`（拖拽落点是否合法）+ `pendingSites`（「一键打开未签到」的目标：未签且未暂停的**全部**站点，不吃筛选）+ `nextBatch`（分批打开：跳过本次已打开的，每次最多 N 个） |
 | `todo.ts` | 待办创建（`createTodo`，随机 UUID） |
 | `diary.ts` | 电子日记：创建（`createDiaryEntry`，随机 UUID + 创建时间，`now` 可注入）、同天按时间排序、全量关键字搜索（标题 + 正文，日期从新到旧）、有日记的日期列表、时间格式化（本地 `HH:mm`）、正文单行预览（按码点截断） |
 | `tween.ts` | 缓动函数（`easeOutCubic`） |
@@ -108,7 +108,14 @@ reducer 的 `siteReordered` 用 splice 把被拖项插到目标位（`from < to`
 这也是为什么解析层被拆成两个函数：把不可测的部分圈到最小。
 
 **工具箱是「第二个视图」，不是第二个项目。** 顶层用 `view` state 在「签到 / 日记 / 工具箱」
-三个视图之间条件渲染（项目刻意无路由）。工具目录是 `data/tools.ts` 里的静态数组，
+三个视图之间条件渲染（项目刻意无路由）。
+
+**切视图只能走 `App.tsx` 的 `navigate()`，不要在别处直接调 `setView`。** 顶部按钮由文件顶部的
+`VIEWS` 清单生成，加新页面只需：`VIEWS` 加一行 + 加一处 `view === 'xxx' && <Xxx />`。
+因为所有切换都过 `navigate()`，新页面自动带上「离开前确认未保存内容」（机制见下面日记一节第 5 条）。
+新页面里如果有草稿，也调 `useLeaveGuard` 登记，不用改 `App`。
+
+工具目录是 `data/tools.ts` 里的静态数组，
 **不进 localStorage、不升数据版本**——工具是编译期确定的目录，不是用户数据。
 加一个工具只需：`data/tools.ts` 加一行 + 写组件 + 在 `ToolboxView` 里加一条 `React.lazy` 绑定
 并在 `<Suspense>` 内挂上（工具按需加载，每个工具一个独立 chunk，主视图不预载工具箱 JS）。
@@ -146,6 +153,13 @@ reducer 的 `siteReordered` 用 splice 把被拖项插到目标位（`from < to`
    `beforeunload` 监听**按需挂、用完就摘**，不要改成「一直挂着、在回调里判断」：一直挂着会让浏览器
    不把页面放进往返缓存（bfcache），而且判据一宽，每次关页都要多点一下，用户很快就学会无视它。
    提示文字由浏览器决定，页面改不了。`test:diary` 两头都守着：该弹时弹，每一次正常 reload 都断言不弹。
+5. **切视图确认靠组件自己登记，不靠 App 判断页面名。** `useLeaveGuard({ pageClose, viewSwitch })`
+   的 `viewSwitch` 为真时，组件进入一份「未保存名单」。`App` 的 `navigate()` 只问名单里有没有人，
+   有就弹 `window.confirm`。它不管从哪页去哪页，所以以后加的页面自动受保护。
+   - 新建框：`viewSwitch` 跟 `pageClose` 一样。组件卸载时本地 state 就没了，切走就全丢。
+   - 编辑已有条目：正常情况下 `viewSwitch` 为假，卸载时会补交保存，页面还活着、能跑完，不打扰用户。
+     只有「上次成功保存后失败过」才为真。看的是单独记的 `failedSinceSave`，不是 `state === 'failed'`：
+     失败后用户接着打字，`state` 会变回 `'idle'`，只看它就会漏拦。
 
 **保护模式下日记只读**：能看、能搜，不能写。和签到页的管理区同一条规则 ——
 保护模式意味着存储里有读不回来的数据，此时任何写入都可能覆盖掉用户还没救出来的原始内容。

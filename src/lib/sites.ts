@@ -41,6 +41,30 @@ export function pendingSites(sites: Site[], checked: ReadonlySet<string>): Site[
 }
 
 /**
+ * 分批打开：从 `pending` 里按顺序取下一批还没打开过的站，最多 `size` 个。
+ *
+ * ## 为什么分批而不是一次全开
+ *
+ * 每个新标签页是一个独立的渲染进程，要各自下载、执行整站 JS。一次开 20 个重页面，
+ * CPU / 内存 / 带宽同时被占满，每个站都加载得更慢；而签到本来就只能一个一个签。
+ * 分批让「同时在加载的标签页」有上限，节奏也和人签到的速度对得上。
+ * 不用定时器错开：那只是摊平峰值，最终开着的标签页一个不少，还会反复抢焦点。
+ *
+ * ## 为什么 `opened` 由调用方传入
+ *
+ * 只有 `window.open` 真的返回了窗口才算打开过。被弹窗拦截的不记，
+ * 用户允许弹窗后再点，会从没开成的那个继续，而不是跳过它。
+ *
+ * `restart` 为 true 表示未签的都开过一轮了（多半是用户关掉了某个标签页又没签），
+ * 这时从头再开一轮，调用方应清空 `opened`。
+ */
+export function nextBatch(pending: readonly Site[], opened: ReadonlySet<string>, size: number): { batch: Site[]; restart: boolean } {
+  const unopened = pending.filter((site) => !opened.has(site.id))
+  const restart = unopened.length === 0
+  return { batch: (restart ? pending : unopened).slice(0, size), restart }
+}
+
+/**
  * 手动排序下，某个站点能和哪个相邻站点交换位置？返回对方的 id，不能换则返回 null。
  *
  * ## 为什么必须基于**可见列表**而不是存储数组

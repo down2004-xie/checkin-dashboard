@@ -27,6 +27,19 @@ import { SakuraTree } from './components/SakuraTree'
 import { PetalLayer } from './components/PetalLayer'
 import { ToolboxView } from './components/toolbox/ToolboxView'
 import { DiaryView } from './components/DiaryView'
+import { confirmLeaveView } from './hooks/useLeaveGuard'
+
+/**
+ * 顶部的视图清单。加新页面：这里加一行 + 下面加一处 `view === 'xxx' && <Xxx />`。
+ * 按钮由清单生成、全部走 `navigate()`，所以新页面自动带上「离开前确认未保存内容」，不用另外接。
+ */
+const VIEWS = [
+  { id: 'dashboard', label: '签到' },
+  { id: 'diary', label: '日记' },
+  { id: 'tools', label: '工具箱' },
+] as const
+
+type View = (typeof VIEWS)[number]['id']
 
 interface ImportPreview {
   backup: Backup
@@ -49,7 +62,19 @@ export function App() {
   const { preferences, sites } = data
   useDaylight(preferences.theme, preferences.appearance)
   usePointerLight(preferences.effects === 'full')
-  const [view, setView] = useState<'dashboard' | 'diary' | 'tools'>('dashboard')
+  const [view, setView] = useState<View>('dashboard')
+  /**
+   * 切视图的**唯一入口**，不要在别处直接调 setView。
+   *
+   * 判断「要不要确认」只看「当前有没有组件登记了未保存内容」（见 hooks/useLeaveGuard.ts），
+   * 不看从哪页去哪页：签到 → 工具箱这种没草稿的切换名单是空的，直接放行；
+   * 日记页有没保存的草稿时，不管去签到、工具箱还是以后新加的页面，都会先弹确认。
+   */
+  const navigate = (next: View) => {
+    if (next === view) return
+    if (!confirmLeaveView()) return
+    setView(next)
+  }
   const [notice, setNotice] = useState<string | null>(null)
   const [filters, setFilters] = useState<SiteFilters>({ query: '', category: null, status: 'all', sort: 'manual' })
   const [editingId, setEditingId] = useState<string | null>(null)
@@ -162,9 +187,9 @@ export function App() {
       <SakuraTree fullBloom={total > 0 && done === total} />
       {preferences.effects === 'full' && <PetalLayer burstId={burstId} />}
       <nav className="view-switch" aria-label="切换视图">
-        <button type="button" className="view-switch__btn" aria-pressed={view === 'dashboard'} onClick={() => setView('dashboard')}>签到</button>
-        <button type="button" className="view-switch__btn" aria-pressed={view === 'diary'} onClick={() => setView('diary')}>日记</button>
-        <button type="button" className="view-switch__btn" aria-pressed={view === 'tools'} onClick={() => setView('tools')}>工具箱</button>
+        {VIEWS.map((item) => (
+          <button key={item.id} type="button" className="view-switch__btn" aria-pressed={view === item.id} onClick={() => navigate(item.id)}>{item.label}</button>
+        ))}
       </nav>
       {view === 'tools' && <ToolboxView today={today} />}
       {/* 只读只看保护模式；busy 不锁编辑框，否则每次自动保存时输入框都会闪一下禁用、丢焦点 */}
